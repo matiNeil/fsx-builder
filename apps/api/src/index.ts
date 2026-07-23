@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 const app = Fastify({ logger: true });
 let prisma: PrismaClient | null = null;
@@ -137,23 +138,41 @@ app.post("/ai/generate-image", async (request, reply) => {
 
 const PORT = Number(process.env.PORT ?? 4000);
 const HOST = process.env.HOST ?? "0.0.0.0";
+const isVercelRuntime = process.env.VERCEL === "1";
+let isReady = false;
+
+const ensureReady = async () => {
+  if (!isReady) {
+    await app.ready();
+    isReady = true;
+  }
+};
+
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  await ensureReady();
+  app.server.emit("request", req, res);
+}
 
 const close = async () => {
+  if (prisma) {
+    await prisma.$disconnect();
+  }
   await app.close();
   process.exit(0);
 };
+if (!isVercelRuntime) {
+  process.on("SIGINT", () => {
+    void close();
+  });
 
-process.on("SIGINT", () => {
-  void close();
-});
+  process.on("SIGTERM", () => {
+    void close();
+  });
 
-process.on("SIGTERM", () => {
-  void close();
-});
-
-try {
-  await app.listen({ port: PORT, host: HOST });
-} catch (error) {
-  app.log.error(error);
-  process.exit(1);
+  try {
+    await app.listen({ port: PORT, host: HOST });
+  } catch (error) {
+    app.log.error(error);
+    process.exit(1);
+  }
 }
