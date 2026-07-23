@@ -5,7 +5,21 @@ import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 const app = Fastify({ logger: true });
-const prisma = new PrismaClient();
+let prisma: PrismaClient | null = null;
+
+const getPrismaClient = (): PrismaClient | null => {
+  if (prisma) {
+    return prisma;
+  }
+
+  try {
+    prisma = new PrismaClient();
+    return prisma;
+  } catch (error) {
+    app.log.error(error, "Prisma client initialization failed");
+    return null;
+  }
+};
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(120),
@@ -25,8 +39,16 @@ app.get("/health", async () => ({
   timestamp: new Date().toISOString(),
 }));
 
-app.get("/projects", async () => {
-  return prisma.project.findMany({
+app.get("/projects", async (_request, reply) => {
+  const db = getPrismaClient();
+  if (!db) {
+    return reply.status(503).send({
+      error: "Database client unavailable",
+      message: "Prisma client is not initialized in this deployment.",
+    });
+  }
+
+  return db.project.findMany({
     orderBy: { updatedAt: "desc" },
   });
 });
@@ -40,7 +62,15 @@ app.post("/projects", async (request, reply) => {
     });
   }
 
-  const project = await prisma.project.create({
+  const db = getPrismaClient();
+  if (!db) {
+    return reply.status(503).send({
+      error: "Database client unavailable",
+      message: "Prisma client is not initialized in this deployment.",
+    });
+  }
+
+  const project = await db.project.create({
     data: {
       name: parsed.data.name,
       type: parsed.data.type,
@@ -109,7 +139,6 @@ const PORT = Number(process.env.PORT ?? 4000);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
 const close = async () => {
-  await prisma.$disconnect();
   await app.close();
   process.exit(0);
 };
@@ -126,6 +155,5 @@ try {
   await app.listen({ port: PORT, host: HOST });
 } catch (error) {
   app.log.error(error);
-  await prisma.$disconnect();
   process.exit(1);
 }
