@@ -1,7 +1,7 @@
 "use client";
 
 import Konva from "konva";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useImage from "use-image";
 import { Image as KonvaImage, Layer, Rect, Stage, Text } from "react-konva";
 import type { Filter } from "konva/lib/Node";
@@ -11,6 +11,17 @@ import {
   type CreatorLayer,
   type ImageAdjustment,
 } from "../_lib/use-image-creator-store";
+import { createImageProjectState, loadImageProjectState } from "@/lib/image-project-state";
+import { ProjectSaveStatus } from "@/components/project-save-status";
+
+type ImageProject = {
+  id: string;
+  name: string;
+  type: string;
+  data?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 const exportDocumentAsPng = async (
   stageToDataUrl: () => string,
@@ -21,6 +32,15 @@ const exportDocumentAsPng = async (
   link.href = dataUrl;
   link.download = downloadName;
   link.click();
+};
+
+const isTypingInInput = (eventTarget: EventTarget | null) => {
+  const target = eventTarget as HTMLElement | null;
+  if (!target) {
+    return false;
+  }
+  const tagName = target.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || target.isContentEditable;
 };
 
 function ImageLayerNode({
@@ -89,6 +109,22 @@ export function ImageCreatorEditor() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const [projectName, setProjectName] = useState("image-creator");
+  const [projects, setProjects] = useState<ImageProject[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [projectMessage, setProjectMessage] = useState<string | null>(null);
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const shortcutModifier =
+    typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac")
+      ? "⌘"
+      : "Ctrl";
+
   const {
     document,
     selectedLayerId,
@@ -104,11 +140,207 @@ export function ImageCreatorEditor() {
     moveLayer,
     updateLayerText,
     setImageAdjustment,
+    setDocumentName,
+    hydrateDocument,
     undo,
     redo,
   } = useImageCreatorStore();
 
   const selectedLayer = document.layers.find((layer) => layer.id === selectedLayerId);
+  const currentSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        name: projectName.trim(),
+        data: createImageProjectState(document, selectedLayerId, imageAdjustments),
+      }),
+    [projectName, document, selectedLayerId, imageAdjustments]
+  );
+  const hasUnsavedChanges =
+    Boolean(activeProjectId && lastSavedSnapshot) && currentSnapshot !== lastSavedSnapshot;
+
+  const fetchProjects = useCallback(async () => {
+    setIsLoadingProjects(true);
+    setProjectError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects`);
+      const payload = (await response.json()) as
+        | ImageProject[]
+        | { error?: string; message?: string };
+      if (!response.ok || !Array.isArray(payload)) {
+        const errorMessage =
+          !Array.isArray(payload) && payload.message
+            ? payload.message
+            : "Unable to load projects.";
+        throw new Error(errorMessage);
+      }
+      setProjects(payload.filter((project) => project.type === "image"));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to load image projects.";
+      setProjectError(message);
+      setProjects([]);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchProjects();
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [fetchProjects]);
+
+  const persistProject = useCallback(
+    async (method: "POST" | "PUT", projectId?: string, silent = false) => {
+      const normalizedName = projectName.trim();
+      if (!normalizedName) {
+        if (!silent) {
+          setProjectError("Enter a project name.");
+        }
+        return false;
+      }
+      setDocumentName(normalizedName);
+
+      if (silent) {
+        setIsAutoSaving(true);
+      } else {
+        setIsSavingProject(true);
+        setProjectMessage(null);
+      }
+      setProjectError(null);
+      try {
+        const payloadData = createImageProjectState(document, selectedLayerId, imageAdjustments);
+        const endpoint =
+          method === "POST" ? `${API_BASE_URL}/projects` : `${API_BASE_URL}/projects/${projectId}`;
+        const response = await fetch(endpoint, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            method === "POST"
+              ? {
+                  name: normalizedName,
+                  type: "image",
+                  data: payloadData,
+                }
+              : {
+                  name: normalizedName,
+                  data: payloadData,
+                }
+          ),
+        });
+
+        const payload = (await response.json()) as
+          | ImageProject
+          | { error?: string; message?: string };
+        if (!response.ok || !("id" in payload)) {
+          const errorMessage =
+            !("id" in payload) && payload.message
+              ? payload.message
+              : "Failed to save image project.";
+          throw new Error(errorMessage);
+        }
+        setActiveProjectId(payload.id);
+        setLastSavedSnapshot(
+          JSON.stringify({
+            name: normalizedName,
+            data: payloadData,
+          })
+        );
+        setLastSavedAt(new Date().toISOString());
+        if (!silent) {
+          setProjectMessage(method === "POST" ? "Image project created." : "Image project state saved.");
+        }
+        await fetchProjects();
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to save image project.";
+        setProjectError(message);
+        return false;
+      } finally {
+        if (silent) {
+          setIsAutoSaving(false);
+        } else {
+          setIsSavingProject(false);
+        }
+      }
+    },
+    [projectName, document, selectedLayerId, imageAdjustments, fetchProjects, setDocumentName]
+  );
+
+  const onOpenProject = (project: ImageProject) => {
+    const loadedState = loadImageProjectState(project.data, document);
+    hydrateDocument(
+      loadedState.document,
+      loadedState.imageAdjustments,
+      loadedState.selectedLayerId
+    );
+    setProjectName(project.name);
+    setActiveProjectId(project.id);
+    setLastSavedSnapshot(
+      JSON.stringify({
+        name: project.name,
+        data: createImageProjectState(
+          loadedState.document,
+          loadedState.selectedLayerId,
+          loadedState.imageAdjustments
+        ),
+      })
+    );
+    setLastSavedAt(new Date().toISOString());
+    setProjectMessage(`Opened image project "${project.name}".`);
+    setProjectError(null);
+  };
+
+  useEffect(() => {
+    if (!activeProjectId || !hasUnsavedChanges || isSavingProject || isAutoSaving) {
+      return;
+    }
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      void persistProject("PUT", activeProjectId, true);
+    }, 1400);
+    return () => {
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [activeProjectId, hasUnsavedChanges, isSavingProject, isAutoSaving, persistProject]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "s") {
+        event.preventDefault();
+        if (activeProjectId) {
+          void persistProject("PUT", activeProjectId);
+        } else if (projectName.trim()) {
+          void persistProject("POST");
+        }
+      }
+      if (event.shiftKey && !isTypingInInput(event.target)) {
+        if (key === "t") {
+          event.preventDefault();
+          addTextLayer();
+        }
+        if (key === "r") {
+          event.preventDefault();
+          addRectangleLayer();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeProjectId, projectName, persistProject, addTextLayer, addRectangleLayer]);
 
   const onUploadImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -176,15 +408,94 @@ export function ImageCreatorEditor() {
           Layer-based canvas editor with templates, filters, text tools, and AI image generation.
         </p>
       </header>
-
       <section className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_280px]">
         <aside className="space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="space-y-2 border-b border-zinc-200 pb-3 dark:border-zinc-800">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Project</h2>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              placeholder="Image project name"
+              className="w-full rounded-md border border-zinc-300 bg-transparent px-2.5 py-2 text-sm dark:border-zinc-700"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="rounded-md bg-blue-600 px-2.5 py-2 text-xs font-medium text-white disabled:opacity-60"
+                disabled={isSavingProject}
+                onClick={() => void persistProject("POST")}
+              >
+                Create
+              </button>
+              <button
+                className="rounded-md border border-zinc-300 px-2.5 py-2 text-xs disabled:opacity-60 dark:border-zinc-700"
+                disabled={isSavingProject || !activeProjectId}
+                onClick={() => void persistProject("PUT", activeProjectId ?? undefined)}
+              >
+                Save state
+              </button>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Active: {activeProjectId ?? "none"}
+                </p>
+                <button
+                  className="rounded-md border border-zinc-300 px-2 py-0.5 text-[11px] dark:border-zinc-700"
+                  onClick={() => void fetchProjects()}
+                  type="button"
+                >
+                  Refresh
+                </button>
+              </div>
+              <ProjectSaveStatus
+                hasUnsavedChanges={hasUnsavedChanges}
+                isAutoSaving={isAutoSaving}
+                lastSavedAt={lastSavedAt}
+                shortcutHint={`${shortcutModifier}+S save, Shift+${shortcutModifier}+T add text, Shift+${shortcutModifier}+R add shape.`}
+              />
+              {projectMessage ? (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">{projectMessage}</p>
+              ) : null}
+              {projectError ? <p className="text-xs text-red-500">{projectError}</p> : null}
+              {isLoadingProjects ? (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Loading projects...</p>
+              ) : (
+                <div className="max-h-24 space-y-1 overflow-auto">
+                  {projects.length === 0 ? (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">No image projects yet.</p>
+                  ) : (
+                    projects.map((project) => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => onOpenProject(project)}
+                        className={`w-full rounded-md border px-2 py-1 text-left text-xs ${
+                          activeProjectId === project.id
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
+                            : "border-zinc-300 dark:border-zinc-700"
+                        }`}
+                      >
+                        {project.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
           <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Tools</h2>
           <div className="grid gap-2">
-            <button className="rounded-md bg-zinc-900 px-3 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900" onClick={addTextLayer}>
+            <button
+              className="rounded-md bg-zinc-900 px-3 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+              onClick={addTextLayer}
+            >
               Add text
             </button>
-            <button className="rounded-md bg-zinc-900 px-3 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900" onClick={addRectangleLayer}>
+            <button
+              className="rounded-md bg-zinc-900 px-3 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+              onClick={addRectangleLayer}
+            >
               Add shape
             </button>
             <button
@@ -195,7 +506,6 @@ export function ImageCreatorEditor() {
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onUploadImage} />
           </div>
-
           <div className="space-y-2">
             <h3 className="text-sm font-medium">AI Image</h3>
             <textarea
@@ -213,7 +523,6 @@ export function ImageCreatorEditor() {
             </button>
             {aiError ? <p className="text-xs text-red-500">{aiError}</p> : null}
           </div>
-
           <div className="grid grid-cols-2 gap-2">
             <button
               className="rounded-md border border-zinc-300 px-3 py-2 text-sm disabled:opacity-50 dark:border-zinc-700"
@@ -230,16 +539,16 @@ export function ImageCreatorEditor() {
               Redo
             </button>
           </div>
-
-          <button className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700" onClick={onExportPng}>
+          <button
+            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700"
+            onClick={onExportPng}
+          >
             Export PNG
           </button>
-
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             History: {history.past.length} undo / {history.future.length} redo
           </p>
         </aside>
-
         <section className="overflow-auto rounded-xl border border-zinc-200 bg-zinc-100 p-4 dark:border-zinc-800 dark:bg-zinc-950">
           <div className="mx-auto w-fit rounded-md border border-zinc-300 bg-white shadow dark:border-zinc-700">
             <Stage ref={stageRef} width={document.width} height={document.height}>
@@ -307,7 +616,6 @@ export function ImageCreatorEditor() {
             </Stage>
           </div>
         </section>
-
         <aside className="space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
           <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Layers</h2>
           <div className="max-h-56 space-y-2 overflow-auto">
@@ -315,7 +623,9 @@ export function ImageCreatorEditor() {
               <button
                 key={layer.id}
                 className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
-                  selectedLayerId === layer.id ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40" : "border-zinc-300 dark:border-zinc-700"
+                  selectedLayerId === layer.id
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
+                    : "border-zinc-300 dark:border-zinc-700"
                 }`}
                 onClick={() => selectLayer(layer.id)}
               >
@@ -325,7 +635,6 @@ export function ImageCreatorEditor() {
               </button>
             ))}
           </div>
-
           {selectedLayer ? (
             <div className="space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
               <h3 className="text-sm font-medium">Selected layer</h3>
@@ -337,7 +646,6 @@ export function ImageCreatorEditor() {
                   className="h-20 w-full rounded-md border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
                 />
               ) : null}
-
               {selectedLayer.type === "image" ? (
                 <div className="space-y-2">
                   <label className="block text-xs">
@@ -386,7 +694,6 @@ export function ImageCreatorEditor() {
                   </label>
                 </div>
               ) : null}
-
               <button
                 className="w-full rounded-md border border-red-400 px-3 py-2 text-sm text-red-600 dark:border-red-700 dark:text-red-400"
                 onClick={() => removeLayer(selectedLayer.id)}

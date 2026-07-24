@@ -117,7 +117,7 @@ export type CreatorImageLayer = ImageLayer & NamedLayer;
 export type CreatorTextLayer = TextLayer & NamedLayer;
 export type CreatorShapeLayer = ShapeLayer & NamedLayer;
 export type CreatorLayer = CreatorImageLayer | CreatorTextLayer | CreatorShapeLayer;
-type CreatorDocument = Omit<CanvasDocument, "layers"> & { layers: CreatorLayer[] };
+export type CreatorDocument = Omit<CanvasDocument, "layers"> & { layers: CreatorLayer[] };
 
 export type ImageAdjustment = {
   brightness: number;
@@ -157,6 +157,12 @@ type ImageCreatorStore = {
     layerId: string,
     key: keyof ImageAdjustment,
     value: number | boolean
+  ) => void;
+  setDocumentName: (name: string) => void;
+  hydrateDocument: (
+    document: CreatorDocument,
+    imageAdjustments?: Record<string, ImageAdjustment>,
+    selectedLayerId?: string | null
   ) => void;
   undo: () => void;
   redo: () => void;
@@ -319,6 +325,33 @@ export const useImageCreatorStore = create<ImageCreatorStore>((set, get) => ({
         },
       },
     }));
+  },
+  setDocumentName: (name) => {
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      return;
+    }
+    const current = get().document;
+    const nextDocument = {
+      ...current,
+      name: normalizedName,
+    };
+    applyDocument(set, nextDocument);
+  },
+  hydrateDocument: (document, imageAdjustments = {}, selectedLayerId = null) => {
+    const hydratedDocument = {
+      ...document,
+      layers: [...document.layers],
+    };
+    const nextHistory = initializeHistory(hydratedDocument) as CreatorHistoryState;
+    set({
+      history: nextHistory,
+      document: nextHistory.present,
+      selectedLayerId,
+      imageAdjustments,
+      canUndo: false,
+      canRedo: false,
+    });
   },
   undo: () => {
     set((state) => {

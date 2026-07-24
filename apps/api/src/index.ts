@@ -25,10 +25,15 @@ const getPrismaClient = (): PrismaClient | null => {
 const createProjectSchema = z.object({
   name: z.string().min(1).max(120),
   type: z.enum(["website", "poster", "image"]),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 const aiImageSchema = z.object({
   prompt: z.string().min(3).max(1000),
   size: z.enum(["1024x1024", "1536x1024", "1024x1536"]).default("1024x1024"),
+});
+const updateProjectSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 await app.register(cors, { origin: true });
@@ -85,11 +90,60 @@ app.post("/projects", async (request, reply) => {
     data: {
       name: parsed.data.name,
       type: parsed.data.type,
-      data: "{}",
+      data: JSON.stringify(parsed.data.data ?? {}),
     },
   });
 
   return reply.status(201).send(project);
+});
+
+app.put("/projects/:id", async (request, reply) => {
+  const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+  if (!params.success) {
+    return reply.status(400).send({
+      error: "Invalid project id",
+      issues: params.error.issues,
+    });
+  }
+
+  const parsed = updateProjectSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.status(400).send({
+      error: "Invalid payload",
+      issues: parsed.error.issues,
+    });
+  }
+
+  if (!parsed.data.name && !parsed.data.data) {
+    return reply.status(400).send({
+      error: "No updates provided",
+      message: "Provide at least one field to update.",
+    });
+  }
+
+  const db = getPrismaClient();
+  if (!db) {
+    return reply.status(503).send({
+      error: "Database client unavailable",
+      message: "Prisma client is not initialized in this deployment.",
+    });
+  }
+
+  try {
+    const project = await db.project.update({
+      where: { id: params.data.id },
+      data: {
+        ...(parsed.data.name ? { name: parsed.data.name } : {}),
+        ...(parsed.data.data ? { data: JSON.stringify(parsed.data.data) } : {}),
+      },
+    });
+    return reply.status(200).send(project);
+  } catch {
+    return reply.status(404).send({
+      error: "Project not found",
+      message: "No project exists with the provided id.",
+    });
+  }
 });
 
 app.post("/ai/generate-image", async (request, reply) => {
