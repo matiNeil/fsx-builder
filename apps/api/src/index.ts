@@ -22,6 +22,42 @@ const getPrismaClient = (): PrismaClient | null => {
   }
 };
 
+const ensureSqliteSchema = async () => {
+  const db = getPrismaClient();
+  if (!db) {
+    return;
+  }
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Project" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "name" TEXT NOT NULL,
+      "type" TEXT NOT NULL,
+      "data" TEXT NOT NULL DEFAULT '{}',
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL
+    );
+  `);
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Asset" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "projectId" TEXT NOT NULL,
+      "filename" TEXT NOT NULL,
+      "mimeType" TEXT NOT NULL,
+      "path" TEXT NOT NULL,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Asset_projectId_fkey"
+        FOREIGN KEY ("projectId")
+        REFERENCES "Project" ("id")
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+    );
+  `);
+  await db.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "Asset_projectId_idx" ON "Asset"("projectId");
+  `);
+};
+
 const createProjectSchema = z.object({
   name: z.string().min(1).max(120),
   type: z.enum(["website", "poster", "image"]),
@@ -38,6 +74,13 @@ const updateProjectSchema = z.object({
 
 await app.register(cors, { origin: true });
 await app.register(multipart);
+app.addHook("onReady", async () => {
+  try {
+    await ensureSqliteSchema();
+  } catch (error) {
+    app.log.error(error, "Failed to ensure SQLite schema");
+  }
+});
 app.get("/", async () => ({
   ok: true,
   service: "fsx-api",
