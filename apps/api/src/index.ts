@@ -97,6 +97,35 @@ app.post("/projects", async (request, reply) => {
   return reply.status(201).send(project);
 });
 
+app.get("/projects/:id", async (request, reply) => {
+  const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+  if (!params.success) {
+    return reply.status(400).send({
+      error: "Invalid project id",
+      issues: params.error.issues,
+    });
+  }
+
+  const db = getPrismaClient();
+  if (!db) {
+    return reply.status(503).send({
+      error: "Database client unavailable",
+      message: "Prisma client is not initialized in this deployment.",
+    });
+  }
+
+  const project = await db.project.findUnique({
+    where: { id: params.data.id },
+  });
+  if (!project) {
+    return reply.status(404).send({
+      error: "Project not found",
+      message: "No project exists with the provided id.",
+    });
+  }
+  return reply.status(200).send(project);
+});
+
 app.put("/projects/:id", async (request, reply) => {
   const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
   if (!params.success) {

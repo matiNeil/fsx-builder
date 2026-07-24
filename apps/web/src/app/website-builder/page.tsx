@@ -10,9 +10,11 @@ import {
 } from "@/lib/templates";
 import {
   createPersistedWebsiteProjectState,
-  createTemplateBackedBlocks,
+  createTemplateBackedPages,
   loadWebsiteProjectState,
-  type WebsiteContentBlock,
+  type WebsiteBreakpoint,
+  type WebsitePage,
+  type WebsiteProjectState,
 } from "@/lib/website-project-state";
 import { ProjectSaveStatus } from "@/components/project-save-status";
 
@@ -27,6 +29,22 @@ type WebsiteProject = {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000";
+
+const breakpoints: WebsiteBreakpoint[] = ["desktop", "tablet", "mobile"];
+const breakpointLabels: Record<WebsiteBreakpoint, string> = {
+  desktop: "Desktop",
+  tablet: "Tablet",
+  mobile: "Mobile",
+};
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+const createId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
 const isTypingInInput = (eventTarget: EventTarget | null) => {
   const target = eventTarget as HTMLElement | null;
@@ -43,6 +61,11 @@ export default function WebsiteBuilderPage() {
     () => ["All", ...listWebsiteTemplateCategories()] as Array<"All" | WebsiteTemplateCategory>,
     []
   );
+  const shortcutModifier =
+    typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac")
+      ? "⌘"
+      : "Ctrl";
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<"All" | WebsiteTemplateCategory>(
     "All"
@@ -54,45 +77,48 @@ export default function WebsiteBuilderPage() {
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [contentBlocks, setContentBlocks] = useState<WebsiteContentBlock[]>(() =>
-    createTemplateBackedBlocks(null, websiteTemplates)
-  );
+  const [pages, setPages] = useState<WebsitePage[]>(() => createTemplateBackedPages(null, websiteTemplates));
+  const [activePageId, setActivePageId] = useState<string | null>(pages[0]?.id ?? null);
+  const [activeBreakpoint, setActiveBreakpoint] = useState<WebsiteBreakpoint>("desktop");
   const [projectMessage, setProjectMessage] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
+  const draggingSectionIdRef = useRef<string | null>(null);
 
   const filteredTemplates = useMemo(
     () => searchWebsiteTemplates(websiteTemplates, searchQuery, selectedCategory),
     [websiteTemplates, searchQuery, selectedCategory]
   );
+  const activePage = useMemo(
+    () => pages.find((page) => page.id === activePageId) ?? pages[0] ?? null,
+    [pages, activePageId]
+  );
 
   const createProjectStatePayload = useCallback(
-    () =>
-      createPersistedWebsiteProjectState({
+    (publishedAt?: string | null): WebsiteProjectState =>
+      ({
         selectedTemplateId,
         searchQuery,
         selectedCategory,
-        contentBlocks,
-      }),
-    [selectedTemplateId, searchQuery, selectedCategory, contentBlocks]
+        pages,
+        activePageId: activePage?.id ?? null,
+        publishedAt: publishedAt ?? null,
+      }) satisfies WebsiteProjectState,
+    [selectedTemplateId, searchQuery, selectedCategory, pages, activePage]
   );
-
   const currentSnapshot = useMemo(
     () =>
       JSON.stringify({
         name: projectName.trim(),
-        data: createProjectStatePayload(),
+        data: createPersistedWebsiteProjectState(createProjectStatePayload()),
       }),
     [projectName, createProjectStatePayload]
   );
   const hasUnsavedChanges =
     Boolean(activeProjectId && lastSavedSnapshot) && currentSnapshot !== lastSavedSnapshot;
-  const shortcutModifier =
-    typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac")
-      ? "⌘"
-      : "Ctrl";
 
   const fetchProjects = useCallback(async () => {
     setIsLoadingProjects(true);
@@ -102,7 +128,6 @@ export default function WebsiteBuilderPage() {
       const payload = (await response.json()) as
         | WebsiteProject[]
         | { error?: string; message?: string };
-
       if (!response.ok || !Array.isArray(payload)) {
         const errorMessage =
           !Array.isArray(payload) && payload.message
@@ -110,7 +135,6 @@ export default function WebsiteBuilderPage() {
             : "Unable to load projects.";
         throw new Error(errorMessage);
       }
-
       setProjects(payload.filter((project) => project.type === "website"));
     } catch (error) {
       const message =
@@ -126,13 +150,11 @@ export default function WebsiteBuilderPage() {
     const timer = window.setTimeout(() => {
       void fetchProjects();
     }, 0);
-    return () => {
-      window.clearTimeout(timer);
-    };
+    return () => window.clearTimeout(timer);
   }, [fetchProjects]);
 
   const persistCurrentState = useCallback(
-    async (silent = false) => {
+    async (silent = false, publishedAt?: string | null) => {
       if (!activeProjectId) {
         if (!silent) {
           setProjectError("Open a project first to save builder state.");
@@ -157,7 +179,7 @@ export default function WebsiteBuilderPage() {
       setProjectError(null);
 
       try {
-        const payloadData = createProjectStatePayload();
+        const payloadData = createPersistedWebsiteProjectState(createProjectStatePayload(publishedAt));
         const response = await fetch(`${API_BASE_URL}/projects/${activeProjectId}`, {
           method: "PUT",
           headers: {
@@ -168,7 +190,6 @@ export default function WebsiteBuilderPage() {
             data: payloadData,
           }),
         });
-
         const payload = (await response.json()) as
           | WebsiteProject
           | { error?: string; message?: string };
@@ -179,12 +200,12 @@ export default function WebsiteBuilderPage() {
               : "Failed to save project state.";
           throw new Error(errorMessage);
         }
-
-        const nextSnapshot = JSON.stringify({
-          name,
-          data: payloadData,
-        });
-        setLastSavedSnapshot(nextSnapshot);
+        setLastSavedSnapshot(
+          JSON.stringify({
+            name,
+            data: payloadData,
+          })
+        );
         setLastSavedAt(new Date().toISOString());
         if (!silent) {
           setProjectMessage("Project state saved.");
@@ -217,9 +238,8 @@ export default function WebsiteBuilderPage() {
     setIsSavingProject(true);
     setProjectError(null);
     setProjectMessage(null);
-
     try {
-      const payloadData = createProjectStatePayload();
+      const payloadData = createPersistedWebsiteProjectState(createProjectStatePayload());
       const response = await fetch(`${API_BASE_URL}/projects`, {
         method: "POST",
         headers: {
@@ -231,7 +251,6 @@ export default function WebsiteBuilderPage() {
           data: payloadData,
         }),
       });
-
       const payload = (await response.json()) as
         | WebsiteProject
         | { error?: string; message?: string };
@@ -243,14 +262,15 @@ export default function WebsiteBuilderPage() {
         throw new Error(errorMessage);
       }
 
-      const snapshot = JSON.stringify({
-        name,
-        data: payloadData,
-      });
       setActiveProjectId(payload.id);
-      setLastSavedSnapshot(snapshot);
+      setLastSavedSnapshot(
+        JSON.stringify({
+          name,
+          data: payloadData,
+        })
+      );
       setLastSavedAt(new Date().toISOString());
-      setProjectMessage("Project saved with current template and page content blocks.");
+      setProjectMessage("Project saved.");
       await fetchProjects();
     } catch (error) {
       const message =
@@ -263,67 +283,166 @@ export default function WebsiteBuilderPage() {
 
   const onOpenProject = (project: WebsiteProject) => {
     const projectState = loadWebsiteProjectState(project.data, websiteTemplates);
-    const snapshot = JSON.stringify({
-      name: project.name,
-      data: createPersistedWebsiteProjectState(projectState),
+    const normalizedPages =
+      projectState.pages.length > 0 ? projectState.pages : createTemplateBackedPages(null, websiteTemplates);
+    const normalizedActivePageId =
+      projectState.activePageId && normalizedPages.some((page) => page.id === projectState.activePageId)
+        ? projectState.activePageId
+        : (normalizedPages[0]?.id ?? null);
+    const payload = createPersistedWebsiteProjectState({
+      ...projectState,
+      pages: normalizedPages,
+      activePageId: normalizedActivePageId,
     });
+
     setActiveProjectId(project.id);
     setProjectName(project.name);
+    setSelectedTemplateId(projectState.selectedTemplateId);
     setSearchQuery(projectState.searchQuery);
     setSelectedCategory(projectState.selectedCategory);
-    setSelectedTemplateId(projectState.selectedTemplateId);
-    setContentBlocks(projectState.contentBlocks);
-    setLastSavedSnapshot(snapshot);
+    setPages(normalizedPages);
+    setActivePageId(normalizedActivePageId);
+    setPublishedUrl(
+      projectState.publishedAt && typeof window !== "undefined"
+        ? `${window.location.origin}/published/${project.id}`
+        : null
+    );
+    setLastSavedSnapshot(
+      JSON.stringify({
+        name: project.name,
+        data: payload,
+      })
+    );
     setLastSavedAt(new Date().toISOString());
     setProjectMessage(`Opened project "${project.name}".`);
     setProjectError(null);
   };
 
-  const onSaveCurrentState = async () => {
-    await persistCurrentState(false);
-  };
-
   const onSelectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
-    setContentBlocks(createTemplateBackedBlocks(templateId, websiteTemplates));
+    const templatePages = createTemplateBackedPages(templateId, websiteTemplates);
+    setPages(templatePages);
+    setActivePageId(templatePages[0]?.id ?? null);
   };
 
-  const onChangeContentBlock = (
-    blockId: string,
-    key: "heading" | "body",
-    value: string
-  ) => {
-    setContentBlocks((currentBlocks) =>
-      currentBlocks.map((block) =>
-        block.id === blockId
-          ? {
-              ...block,
-              [key]: value,
-            }
-          : block
-      )
+  const updateActivePage = useCallback((updater: (page: WebsitePage) => WebsitePage) => {
+    if (!activePageId) {
+      return;
+    }
+    setPages((currentPages) =>
+      currentPages.map((page) => (page.id === activePageId ? updater(page) : page))
     );
-  };
+  }, [activePageId]);
 
-  const onAddContentBlock = useCallback(() => {
-    setContentBlocks((currentBlocks) => [
-      ...currentBlocks,
-      {
-        id: `custom-${Date.now()}`,
-        heading: `New Section ${currentBlocks.length + 1}`,
-        body: "",
+  const onAddPage = useCallback(() => {
+    const title = `Page ${pages.length + 1}`;
+    const slug = slugify(title);
+    const newPage: WebsitePage = {
+      id: createId("page"),
+      title,
+      slug,
+      sections: [
+        {
+          id: createId("section"),
+          heading: `${title} Hero`,
+          body: "Describe this page content.",
+        },
+      ],
+      responsive: activePage?.responsive ?? {
+        desktop: { columns: 1, contentWidth: 960, sectionGap: 24, fontScale: 1 },
+        tablet: { columns: 1, contentWidth: 760, sectionGap: 20, fontScale: 0.95 },
+        mobile: { columns: 1, contentWidth: 420, sectionGap: 16, fontScale: 0.9 },
       },
-    ]);
-  }, []);
+    };
+    setPages((current) => [...current, newPage]);
+    setActivePageId(newPage.id);
+  }, [pages.length, activePage]);
 
-  const onRemoveContentBlock = (blockId: string) => {
-    setContentBlocks((currentBlocks) => {
-      const nextBlocks = currentBlocks.filter((block) => block.id !== blockId);
-      return nextBlocks.length > 0
-        ? nextBlocks
-        : createTemplateBackedBlocks(selectedTemplateId, websiteTemplates);
+  const onRemovePage = (pageId: string) => {
+    setPages((currentPages) => {
+      if (currentPages.length <= 1) {
+        return currentPages;
+      }
+      const nextPages = currentPages.filter((page) => page.id !== pageId);
+      if (activePageId === pageId) {
+        setActivePageId(nextPages[0]?.id ?? null);
+      }
+      return nextPages;
     });
   };
+
+  const onAddSection = useCallback(() => {
+    if (!activePage) {
+      return;
+    }
+    const nextIndex = activePage.sections.length + 1;
+    updateActivePage((page) => ({
+      ...page,
+      sections: [
+        ...page.sections,
+        {
+          id: createId("section"),
+          heading: `Section ${nextIndex}`,
+          body: "",
+        },
+      ],
+    }));
+  }, [activePage, updateActivePage]);
+
+  const onRemoveSection = (sectionId: string) => {
+    if (!activePage) {
+      return;
+    }
+    updateActivePage((page) => {
+      const nextSections = page.sections.filter((section) => section.id !== sectionId);
+      return {
+        ...page,
+        sections: nextSections.length > 0 ? nextSections : page.sections,
+      };
+    });
+  };
+
+  const onSectionDragStart = (sectionId: string) => {
+    draggingSectionIdRef.current = sectionId;
+  };
+  const onSectionDrop = (targetSectionId: string) => {
+    if (!activePage || !draggingSectionIdRef.current) {
+      return;
+    }
+    const sourceId = draggingSectionIdRef.current;
+    if (sourceId === targetSectionId) {
+      return;
+    }
+    updateActivePage((page) => {
+      const sections = [...page.sections];
+      const sourceIndex = sections.findIndex((section) => section.id === sourceId);
+      const targetIndex = sections.findIndex((section) => section.id === targetSectionId);
+      if (sourceIndex < 0 || targetIndex < 0) {
+        return page;
+      }
+      const [moved] = sections.splice(sourceIndex, 1);
+      sections.splice(targetIndex, 0, moved);
+      return { ...page, sections };
+    });
+    draggingSectionIdRef.current = null;
+  };
+
+  const onPublish = useCallback(async () => {
+    if (!activeProjectId) {
+      setProjectError("Create or open a project first to publish.");
+      return;
+    }
+    const publishedAt = new Date().toISOString();
+    const saved = await persistCurrentState(false, publishedAt);
+    if (!saved) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const url = `${window.location.origin}/published/${activeProjectId}`;
+      setPublishedUrl(url);
+      setProjectMessage(`Published live: ${url}`);
+    }
+  }, [activeProjectId, persistCurrentState]);
 
   useEffect(() => {
     if (!activeProjectId || !hasUnsavedChanges || isSavingProject || isAutoSaving) {
@@ -356,24 +475,35 @@ export default function WebsiteBuilderPage() {
           void onCreateProject();
         }
       }
-      if (key === "b" && event.shiftKey && !isTypingInInput(event.target)) {
+      if (!event.shiftKey || isTypingInInput(event.target)) {
+        return;
+      }
+      if (key === "b") {
         event.preventDefault();
-        onAddContentBlock();
+        onAddSection();
+      }
+      if (key === "n") {
+        event.preventDefault();
+        onAddPage();
+      }
+      if (key === "p") {
+        event.preventDefault();
+        void onPublish();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeProjectId, projectName, persistCurrentState, onCreateProject, onAddContentBlock]);
+  }, [activeProjectId, projectName, onCreateProject, persistCurrentState, onAddSection, onAddPage, onPublish]);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-6 py-10 sm:px-10">
       <h1 className="text-3xl font-semibold">Website Builder</h1>
       <p className="max-w-3xl text-zinc-600 dark:text-zinc-400">
-        Choose from a large template library and start building faster.
+        Build and publish multi-page websites with drag-drop sections and responsive controls.
       </p>
 
       <section className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="text-lg font-medium">Create project</h2>
+        <h2 className="text-lg font-medium">Project</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Active project: {activeProjectId ?? "none"}
         </p>
@@ -381,7 +511,7 @@ export default function WebsiteBuilderPage() {
           hasUnsavedChanges={hasUnsavedChanges}
           isAutoSaving={isAutoSaving}
           lastSavedAt={lastSavedAt}
-          shortcutHint={`${shortcutModifier}+S save, Shift+${shortcutModifier}+B add block.`}
+          shortcutHint={`${shortcutModifier}+S save, Shift+${shortcutModifier}+N add page, Shift+${shortcutModifier}+B add section, Shift+${shortcutModifier}+P publish.`}
         />
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -401,14 +531,29 @@ export default function WebsiteBuilderPage() {
           </button>
           <button
             type="button"
-            onClick={onSaveCurrentState}
+            onClick={() => void persistCurrentState(false)}
             disabled={isSavingProject || !activeProjectId}
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700"
           >
             Save Builder State
           </button>
+          <button
+            type="button"
+            onClick={() => void onPublish()}
+            disabled={isSavingProject || !activeProjectId}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Publish Live
+          </button>
         </div>
-
+        {publishedUrl ? (
+          <p className="text-xs text-emerald-600 dark:text-emerald-400">
+            Live URL:{" "}
+            <a className="underline" href={publishedUrl} target="_blank" rel="noreferrer">
+              {publishedUrl}
+            </a>
+          </p>
+        ) : null}
         {projectMessage ? (
           <p className="text-sm text-emerald-600 dark:text-emerald-400">{projectMessage}</p>
         ) : null}
@@ -430,9 +575,7 @@ export default function WebsiteBuilderPage() {
           {isLoadingProjects ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading projects...</p>
           ) : projects.length === 0 ? (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No website projects saved yet.
-            </p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">No website projects saved yet.</p>
           ) : (
             <ul className="space-y-2">
               {projects.map((project) => (
@@ -450,13 +593,6 @@ export default function WebsiteBuilderPage() {
                       {activeProjectId === project.id ? "Opened" : "Open"}
                     </button>
                   </div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {project.updatedAt
-                      ? `Updated ${new Date(project.updatedAt).toLocaleString()}`
-                      : project.createdAt
-                        ? `Created ${new Date(project.createdAt).toLocaleString()}`
-                        : "Saved"}
-                  </div>
                 </li>
               ))}
             </ul>
@@ -473,10 +609,9 @@ export default function WebsiteBuilderPage() {
           type="text"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search by name, use case, or size (e.g. ecommerce, blog, 1440x2200)"
+          placeholder="Search by name, use case, or size"
           className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
         />
-
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => {
             const isActive = category === selectedCategory;
@@ -498,55 +633,265 @@ export default function WebsiteBuilderPage() {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Page content blocks</h2>
-          <button
-            type="button"
-            onClick={onAddContentBlock}
-            className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs dark:border-zinc-700"
-          >
-            Add block
-          </button>
-        </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          These blocks are saved with each project and restored when you open it.
-        </p>
-        <div className="space-y-3">
-          {contentBlocks.map((block, index) => (
-            <article
-              key={block.id}
-              className="space-y-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+      <section className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
+              Pages & navigation
+            </h2>
+            <button
+              type="button"
+              onClick={onAddPage}
+              className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700"
             >
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Block {index + 1}
-                </p>
+              Add page
+            </button>
+          </div>
+          <div className="space-y-2">
+            {pages.map((page) => (
+              <article
+                key={page.id}
+                className={`space-y-2 rounded-md border p-2 ${
+                  activePage?.id === page.id
+                    ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+                    : "border-zinc-200 dark:border-zinc-800"
+                }`}
+              >
                 <button
                   type="button"
-                  onClick={() => onRemoveContentBlock(block.id)}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700"
+                  onClick={() => setActivePageId(page.id)}
+                  className="w-full text-left text-sm font-medium"
                 >
-                  Remove
+                  {page.title}
                 </button>
+                <input
+                  type="text"
+                  value={page.title}
+                  onChange={(event) =>
+                    setPages((current) =>
+                      current.map((item) =>
+                        item.id === page.id
+                          ? { ...item, title: event.target.value || "Untitled Page" }
+                          : item
+                      )
+                    )
+                  }
+                  className="w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-xs dark:border-zinc-700"
+                  placeholder="Page title"
+                />
+                <input
+                  type="text"
+                  value={page.slug}
+                  onChange={(event) =>
+                    setPages((current) =>
+                      current.map((item) =>
+                        item.id === page.id
+                          ? { ...item, slug: slugify(event.target.value) }
+                          : item
+                      )
+                    )
+                  }
+                  className="w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-xs dark:border-zinc-700"
+                  placeholder="slug"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemovePage(page.id)}
+                  disabled={pages.length <= 1}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-zinc-700"
+                >
+                  Remove page
+                </button>
+              </article>
+            ))}
+          </div>
+        </aside>
+
+        <div className="space-y-4">
+          <section className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium">Responsive editor</h2>
+              <div className="flex gap-2">
+                {breakpoints.map((breakpoint) => (
+                  <button
+                    key={breakpoint}
+                    type="button"
+                    onClick={() => setActiveBreakpoint(breakpoint)}
+                    className={`rounded-md border px-2.5 py-1 text-xs ${
+                      activeBreakpoint === breakpoint
+                        ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                        : "border-zinc-300 dark:border-zinc-700"
+                    }`}
+                  >
+                    {breakpointLabels[breakpoint]}
+                  </button>
+                ))}
               </div>
-              <input
-                type="text"
-                value={block.heading}
-                onChange={(event) =>
-                  onChangeContentBlock(block.id, "heading", event.target.value)
-                }
-                placeholder="Section heading"
-                className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-              />
-              <textarea
-                value={block.body}
-                onChange={(event) => onChangeContentBlock(block.id, "body", event.target.value)}
-                placeholder="Section body content"
-                className="min-h-24 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-              />
-            </article>
-          ))}
+            </div>
+            {activePage ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Content width
+                  <input
+                    type="number"
+                    value={activePage.responsive[activeBreakpoint].contentWidth}
+                    onChange={(event) =>
+                      updateActivePage((page) => ({
+                        ...page,
+                        responsive: {
+                          ...page.responsive,
+                          [activeBreakpoint]: {
+                            ...page.responsive[activeBreakpoint],
+                            contentWidth: Number(event.target.value) || 320,
+                          },
+                        },
+                      }))
+                    }
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                  />
+                </label>
+                <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Section gap
+                  <input
+                    type="number"
+                    value={activePage.responsive[activeBreakpoint].sectionGap}
+                    onChange={(event) =>
+                      updateActivePage((page) => ({
+                        ...page,
+                        responsive: {
+                          ...page.responsive,
+                          [activeBreakpoint]: {
+                            ...page.responsive[activeBreakpoint],
+                            sectionGap: Number(event.target.value) || 8,
+                          },
+                        },
+                      }))
+                    }
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                  />
+                </label>
+                <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Font scale
+                  <input
+                    type="number"
+                    step={0.05}
+                    value={activePage.responsive[activeBreakpoint].fontScale}
+                    onChange={(event) =>
+                      updateActivePage((page) => ({
+                        ...page,
+                        responsive: {
+                          ...page.responsive,
+                          [activeBreakpoint]: {
+                            ...page.responsive[activeBreakpoint],
+                            fontScale: Number(event.target.value) || 1,
+                          },
+                        },
+                      }))
+                    }
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                  />
+                </label>
+                <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Columns
+                  <input
+                    type="number"
+                    min={1}
+                    max={4}
+                    value={activePage.responsive[activeBreakpoint].columns}
+                    onChange={(event) =>
+                      updateActivePage((page) => ({
+                        ...page,
+                        responsive: {
+                          ...page.responsive,
+                          [activeBreakpoint]: {
+                            ...page.responsive[activeBreakpoint],
+                            columns: Math.max(1, Math.min(4, Number(event.target.value) || 1)),
+                          },
+                        },
+                      }))
+                    }
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                  />
+                </label>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium">
+                Page sections {activePage ? `• ${activePage.title}` : ""}
+              </h2>
+              <button
+                type="button"
+                onClick={onAddSection}
+                className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs dark:border-zinc-700"
+              >
+                Add section
+              </button>
+            </div>
+            {activePage ? (
+              <div
+                className="space-y-3"
+                style={{
+                  gap: `${activePage.responsive[activeBreakpoint].sectionGap}px`,
+                }}
+              >
+                {activePage.sections.map((section, index) => (
+                  <article
+                    key={section.id}
+                    draggable
+                    onDragStart={() => onSectionDragStart(section.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => onSectionDrop(section.id)}
+                    className="space-y-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                        Section {index + 1} • Drag to reorder
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveSection(section.id)}
+                        className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={section.heading}
+                      onChange={(event) =>
+                        updateActivePage((page) => ({
+                          ...page,
+                          sections: page.sections.map((item) =>
+                            item.id === section.id ? { ...item, heading: event.target.value } : item
+                          ),
+                        }))
+                      }
+                      placeholder="Section heading"
+                      className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+                    />
+                    <textarea
+                      value={section.body}
+                      onChange={(event) =>
+                        updateActivePage((page) => ({
+                          ...page,
+                          sections: page.sections.map((item) =>
+                            item.id === section.id ? { ...item, body: event.target.value } : item
+                          ),
+                        }))
+                      }
+                      placeholder="Section body content"
+                      className="min-h-24 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+                    />
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Add a page to start editing.</p>
+            )}
+          </section>
         </div>
       </section>
 
@@ -565,9 +910,7 @@ export default function WebsiteBuilderPage() {
             }`}
           >
             <h2 className="text-lg font-medium">{template.name}</h2>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              {template.description}
-            </p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
             <p className="mt-3 inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
               {getWebsiteTemplateCategory(template)}
             </p>
