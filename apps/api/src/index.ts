@@ -33,6 +33,16 @@ const aiImageSchema = z.object({
 
 await app.register(cors, { origin: true });
 await app.register(multipart);
+app.get("/", async () => ({
+  ok: true,
+  service: "fsx-api",
+  message: "FSX Builder API is running.",
+  endpoints: ["/health", "/projects", "/ai/generate-image"],
+}));
+
+app.get("/favicon.ico", async (_request, reply) => {
+  return reply.status(204).send();
+});
 
 app.get("/health", async () => ({
   ok: true,
