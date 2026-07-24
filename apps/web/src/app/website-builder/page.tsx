@@ -901,9 +901,11 @@ export default function WebsiteBuilderPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredTemplates.map((template) => (
-          <article
+          <button
             key={template.id}
-            className={`rounded-xl border bg-white p-4 dark:bg-zinc-950 ${
+            type="button"
+            onClick={() => onSelectTemplate(template.id)}
+            className={`cursor-pointer rounded-xl border bg-white p-4 text-left transition hover:border-blue-400 dark:bg-zinc-950 ${
               selectedTemplateId === template.id
                 ? "border-blue-500 ring-1 ring-blue-500/40"
                 : "border-zinc-200 dark:border-zinc-800"
@@ -917,14 +919,10 @@ export default function WebsiteBuilderPage() {
             <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
               {template.width} × {template.height}
             </p>
-            <button
-              type="button"
-              onClick={() => onSelectTemplate(template.id)}
-              className="mt-3 rounded-md border border-zinc-300 px-3 py-1.5 text-xs dark:border-zinc-700"
-            >
+            <span className="mt-3 inline-block rounded-md border border-zinc-300 px-3 py-1.5 text-xs dark:border-zinc-700">
               {selectedTemplateId === template.id ? "Selected" : "Select template"}
-            </button>
-          </article>
+            </span>
+          </button>
         ))}
       </section>
       {filteredTemplates.length === 0 ? (
