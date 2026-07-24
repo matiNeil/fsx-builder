@@ -5,13 +5,23 @@ import { useMemo, useRef, useState } from "react";
 import useImage from "use-image";
 import { Image as KonvaImage, Layer, Rect, Stage, Text } from "react-konva";
 import type { Filter } from "konva/lib/Node";
-import { exportDocumentAsPng } from "@fsx/canvas-engine";
 import {
   defaultImageAdjustments,
   useImageCreatorStore,
   type CreatorLayer,
   type ImageAdjustment,
 } from "../_lib/use-image-creator-store";
+
+const exportDocumentAsPng = async (
+  stageToDataUrl: () => string,
+  downloadName = "canvas-export.png"
+): Promise<void> => {
+  const dataUrl = stageToDataUrl();
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = downloadName;
+  link.click();
+};
 
 function ImageLayerNode({
   layer,

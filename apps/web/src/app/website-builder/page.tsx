@@ -7,7 +7,7 @@ import {
   listWebsiteTemplateCategories,
   searchWebsiteTemplates,
   type WebsiteTemplateCategory,
-} from "@fsx/templates";
+} from "@/lib/templates";
 export default function WebsiteBuilderPage() {
   const websiteTemplates = getTemplatesByType("website");
   const categories = useMemo(

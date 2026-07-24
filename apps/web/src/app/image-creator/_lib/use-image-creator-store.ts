@@ -1,18 +1,115 @@
 "use client";
 
-import {
-  createEmptyDocument,
-  initializeHistory,
-  pushHistory,
-  redo as historyRedo,
-  undo as historyUndo,
-  type CanvasDocument,
-  type HistoryState,
-  type ImageLayer,
-  type ShapeLayer,
-  type TextLayer,
-} from "@fsx/canvas-engine";
 import { create } from "zustand";
+
+type LayerType = "image" | "text" | "shape";
+
+interface BaseLayer {
+  id: string;
+  type: LayerType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  visible: boolean;
+}
+
+interface ImageLayer extends BaseLayer {
+  type: "image";
+  src: string;
+}
+
+interface TextLayer extends BaseLayer {
+  type: "text";
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  color: string;
+}
+
+interface ShapeLayer extends BaseLayer {
+  type: "shape";
+  shape: "rectangle" | "circle" | "triangle";
+  fill: string;
+  stroke?: string;
+  strokeWidth?: number;
+}
+
+interface CanvasDocument {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  background: string;
+  layers: Array<ImageLayer | TextLayer | ShapeLayer>;
+}
+
+interface HistoryState {
+  past: CanvasDocument[];
+  present: CanvasDocument;
+  future: CanvasDocument[];
+}
+
+const createEmptyDocument = (
+  name = "Untitled",
+  width = 1200,
+  height = 1200
+): CanvasDocument => ({
+  id: crypto.randomUUID(),
+  name,
+  width,
+  height,
+  background: "#ffffff",
+  layers: [],
+});
+
+const initializeHistory = (document: CanvasDocument): HistoryState => ({
+  past: [],
+  present: document,
+  future: [],
+});
+
+const pushHistory = (
+  state: HistoryState,
+  nextDocument: CanvasDocument
+): HistoryState => ({
+  past: [...state.past, state.present],
+  present: nextDocument,
+  future: [],
+});
+
+const historyUndo = (state: HistoryState): HistoryState => {
+  if (state.past.length === 0) {
+    return state;
+  }
+  const previous = state.past[state.past.length - 1];
+  if (!previous) {
+    return state;
+  }
+  return {
+    past: state.past.slice(0, -1),
+    present: previous,
+    future: [state.present, ...state.future],
+  };
+};
+
+const historyRedo = (state: HistoryState): HistoryState => {
+  if (state.future.length === 0) {
+    return state;
+  }
+  const [next, ...rest] = state.future;
+  if (!next) {
+    return state;
+  }
+  return {
+    past: [...state.past, state.present],
+    present: next,
+    future: rest,
+  };
+};
 
 type NamedLayer = { name: string };
 
