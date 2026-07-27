@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 const COLUMNS: { heading: string; links: { label: string; href: string; external?: boolean }[] }[] = [
   {
     heading: "Products",
@@ -49,7 +51,9 @@ export function SiteFooter() {
     <footer className="border-t border-zinc-200 px-6 py-12 dark:border-zinc-800 sm:px-10">
       <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-6">
         <div className="space-y-3 sm:col-span-2">
-          <p className="text-sm font-semibold">FSX Builder</p>
+          <div className="inline-flex items-center">
+            <Image src="/logo-wordmark.png" alt="FSX Builder" width={754} height={301} className="h-12 w-auto" />
+          </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             The all-in-one AI creative workspace for websites, posters, and images.
           </p>

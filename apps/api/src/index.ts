@@ -56,6 +56,11 @@ const aiImageSchema = z.object({
   size: z.enum(["1024x1024", "1536x1024", "1024x1536"]).default("1024x1024"),
   projectId: z.string().optional(),
 });
+const aiCopySchema = z.object({
+  context: z.string().min(3).max(2000),
+  kind: z.enum(["heading", "body"]),
+  projectId: z.string().optional(),
+});
 const updateProjectSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
@@ -88,6 +93,7 @@ app.get("/", async () => ({
     "/credits/balance",
     "/credits/usage-breakdown",
     "/ai/generate-image",
+    "/ai/generate-copy",
   ],
 }));
 
@@ -479,6 +485,98 @@ await app.register(async (protectedScope) => {
       return reply.status(200).send({
         imageDataUrl: `data:image/png;base64,${imageBase64}`,
         provider: "openai",
+        creditsRemaining: subscription.creditsRemaining,
+      });
+    } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        return reply.status(402).send(insufficientCreditsResponse(error));
+      }
+      throw error;
+    }
+  });
+
+  protectedScope.post("/ai/generate-copy", async (request, reply) => {
+    const parsed = aiCopySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid payload", issues: parsed.error.issues });
+    }
+
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    const affordability = await canAfford(db, request.userId!, "website.ai-copy");
+    if (!affordability.ok) {
+      return reply.status(402).send({
+        error: "insufficient_credits",
+        required: affordability.required,
+        available: affordability.available,
+      });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return reply.status(501).send({
+        error: "AI copy generation is not configured",
+        message: "Set OPENAI_API_KEY in apps/api/.env to enable this feature.",
+      });
+    }
+
+    const lengthHint =
+      parsed.data.kind === "heading"
+        ? "Write a short, punchy heading (max 8 words). Return only the heading text, no quotes."
+        : "Write a concise paragraph (2-3 sentences) of website section body copy. Return only the copy, no quotes or markdown.";
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write concise, professional marketing copy for small business websites. " +
+              lengthHint,
+          },
+          { role: "user", content: parsed.data.context },
+        ],
+        temperature: 0.7,
+        max_tokens: 120,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      request.log.error({ errorBody }, "OpenAI copy generation failed");
+      return reply.status(502).send({
+        error: "Failed to generate copy",
+        message: "The AI provider returned an error.",
+      });
+    }
+
+    const result = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const text = result.choices?.[0]?.message?.content?.trim();
+    if (!text) {
+      return reply.status(502).send({
+        error: "Failed to generate copy",
+        message: "The AI provider did not return text.",
+      });
+    }
+
+    try {
+      const subscription = await chargeCredits(db, request.userId!, "website.ai-copy", {
+        relatedProjectId: parsed.data.projectId,
+      });
+
+      return reply.status(200).send({
+        text,
         creditsRemaining: subscription.creditsRemaining,
       });
     } catch (error) {

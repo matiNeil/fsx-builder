@@ -17,7 +17,7 @@ export function RecentProjects({ projects }: { projects: DashboardProject[] }) {
   const recent = projects.slice(0, 8);
 
   return (
-    <section className="space-y-4">
+    <section id="recent-projects" className="scroll-mt-8 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
           Recent Projects

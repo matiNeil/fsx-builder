@@ -3,11 +3,13 @@ import {
   type TemplateDefinition,
   type WebsiteTemplateCategory,
 } from "@/lib/templates";
+import { flagshipWebsiteTemplateContent } from "@/lib/website-template-content";
 
 export type WebsiteContentBlock = {
   id: string;
   heading: string;
   body: string;
+  imageUrl?: string | null;
 };
 export type WebsiteBreakpoint = "desktop" | "tablet" | "mobile";
 
@@ -79,14 +81,20 @@ const sanitizeContentBlocks = (
           ? candidate.heading
           : null;
       const body = typeof candidate.body === "string" ? candidate.body : "";
+      const imageUrl = typeof candidate.imageUrl === "string" ? candidate.imageUrl : null;
       if (!id || !heading) {
         return null;
       }
-      return { id, heading, body, sortIndex: index };
+      return { id, heading, body, imageUrl, sortIndex: index };
     })
-    .filter((block): block is WebsiteContentBlock & { sortIndex: number } => Boolean(block))
+    .filter(
+      (
+        block
+      ): block is { id: string; heading: string; body: string; imageUrl: string | null; sortIndex: number } =>
+        block !== null
+    )
     .sort((a, b) => a.sortIndex - b.sortIndex)
-    .map(({ id, heading, body }) => ({ id, heading, body }));
+    .map(({ id, heading, body, imageUrl }): WebsiteContentBlock => ({ id, heading, body, imageUrl }));
 
   return normalized.length > 0 ? normalized : createDefaultBlocks(fallbackTemplate);
 };
@@ -176,6 +184,12 @@ export const createTemplateBackedPages = (
   templates: TemplateDefinition[]
 ): WebsitePage[] => {
   const template = templates.find((item) => item.id === selectedTemplateId);
+
+  const flagshipBuilder = selectedTemplateId ? flagshipWebsiteTemplateContent[selectedTemplateId] : undefined;
+  if (flagshipBuilder) {
+    return flagshipBuilder(createId(selectedTemplateId!));
+  }
+
   return [
     {
       id: createId("page"),

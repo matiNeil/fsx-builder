@@ -32,10 +32,11 @@ const SECTIONS = [
           <li>Create a website — 20 credits · Save changes — 2 credits</li>
           <li>Generate a poster — 5 credits · Save changes — 2 credits</li>
           <li>Generate an AI image — 8 credits · Save changes — 3 credits</li>
+          <li>Generate section copy with AI — 3 credits</li>
         </ul>
         <p>
           Autosave never costs credits — only an explicit Save, Publish, or Generate action does.
-          If an AI image generation fails, you aren&apos;t charged. See{" "}
+          If an AI generation fails, you aren&apos;t charged. See{" "}
           <a href="/pricing" className="underline">Pricing</a> for the full plan lineup and how
           many credits each includes per month.
         </p>
@@ -48,12 +49,20 @@ const SECTIONS = [
     body: (
       <>
         <p>
-          Start from a template, then edit pages and sections directly — add or remove pages, drag
-          sections to reorder them, and edit headings and body copy inline.
+          Pick a template and we&apos;ll set up a full, multi-page website with real starter
+          content for you — or describe your business and tap{" "}
+          <strong>Generate with AI</strong> to have it pick a template and write your homepage
+          intro automatically.
         </p>
         <p>
-          Use the responsive editor to fine-tune content width, section spacing, font scale, and
-          column count independently for desktop, tablet, and mobile.
+          From there, edit pages and sections directly: add or remove pages, drag sections to
+          reorder them, tap <strong>Generate with AI</strong> next to any heading or body field to
+          have it written for you, and use <strong>Add image</strong> to pick a photo from the
+          built-in gallery.
+        </p>
+        <p>
+          Fine-tuning content width, section spacing, font scale, and columns per breakpoint is
+          available under <strong>Advanced settings</strong> if you need it — most sites don&apos;t.
         </p>
         <p>
           <strong>Publish</strong> makes your site live at a shareable{" "}

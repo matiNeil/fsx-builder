@@ -2,7 +2,7 @@ const ACTIONS = [
   {
     label: "New Website",
     description: "Build a website",
-    href: "/website-builder",
+    href: "/website-builder/new",
     color: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   },
   {

@@ -124,3 +124,14 @@ test("smoke: legacy contentBlocks payload maps to home page sections", () => {
   assert.equal(loaded.pages[0]?.sections[0]?.heading, "Legacy Hero");
   assert.equal(loaded.pages[0]?.sections.length, 2);
 });
+
+test("smoke: flagship template produces multiple real pages with imagery", () => {
+  const pages = createTemplateBackedPages("website-corporate", websiteTemplates);
+
+  assert.ok(pages.length > 1, "flagship template should create more than one page");
+  assert.equal(pages[0]?.title, "Home");
+  assert.ok(pages.some((page) => page.slug === "about"));
+  assert.ok(pages.some((page) => page.slug === "contact"));
+  assert.notEqual(pages[0]?.sections[0]?.heading, "Corporate Hero");
+  assert.match(pages[0]?.sections[0]?.imageUrl ?? "", /^https:\/\/picsum\.photos\//);
+});

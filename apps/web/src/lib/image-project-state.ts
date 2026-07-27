@@ -3,7 +3,7 @@ import {
   type CreatorDocument,
   type CreatorLayer,
   type ImageAdjustment,
-} from "@/app/image-creator/_lib/use-image-creator-store";
+} from "@/app/(app)/image-creator/_lib/use-image-creator-store";
 
 export type ImageProjectState = {
   document: CreatorDocument;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CreatorDocument } from "@/app/image-creator/_lib/use-image-creator-store";
+import type { CreatorDocument } from "@/app/(app)/image-creator/_lib/use-image-creator-store";
 import { createImageProjectState, loadImageProjectState } from "@/lib/image-project-state";
 
 const baseDocument: CreatorDocument = {

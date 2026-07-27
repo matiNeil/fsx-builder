@@ -57,6 +57,7 @@ const creditCosts = [
   { action: "poster.edit", credits: 2 },
   { action: "image.generate", credits: 8 },
   { action: "image.edit", credits: 3 },
+  { action: "website.ai-copy", credits: 3 },
 ] as const;
 
 async function main() {

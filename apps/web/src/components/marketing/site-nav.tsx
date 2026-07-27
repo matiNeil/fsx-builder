@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { getInitials } from "@/lib/format";
@@ -18,12 +19,9 @@ export function SiteNav() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/70 backdrop-blur-md dark:border-zinc-800/60 dark:bg-zinc-950/70">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4 sm:px-10">
-        <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-          <span className="flex h-6 w-6 rotate-45 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-blue-500">
-            <span className="-rotate-45 text-[10px] font-bold text-white">F</span>
-          </span>
-          FSX Builder
+      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3 sm:px-10">
+        <Link href="/" className="flex items-center">
+          <Image src="/logo-wordmark.png" alt="FSX Builder" width={754} height={301} className="h-12 w-auto" priority />
         </Link>
         <div className="hidden items-center gap-6 text-sm text-zinc-600 dark:text-zinc-400 md:flex">
           {NAV_LINKS.map((link) => (

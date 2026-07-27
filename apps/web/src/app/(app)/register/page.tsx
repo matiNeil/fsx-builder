@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
@@ -46,6 +48,9 @@ export default function RegisterPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-col gap-6 px-6 py-16">
+      <Link href="/" className="inline-flex items-center">
+        <Image src="/logo-wordmark.png" alt="FSX Builder" width={754} height={301} className="h-14 w-auto" />
+      </Link>
       <h1 className="text-2xl font-semibold">Create your account</h1>
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-1">
