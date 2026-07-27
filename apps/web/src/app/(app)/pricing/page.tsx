@@ -80,18 +80,12 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              {plan.key === "free" ? (
-                <a
-                  href="/register"
-                  className="btn-gradient mt-6 rounded-lg px-4 py-2 text-center text-sm font-medium text-white"
-                >
-                  Get started
-                </a>
-              ) : (
-                <span className="mt-6 rounded-lg border border-zinc-300 px-4 py-2 text-center text-sm font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-500">
-                  Coming soon
-                </span>
-              )}
+              <a
+                href="/register"
+                className="btn-gradient mt-6 rounded-lg px-4 py-2 text-center text-sm font-medium text-white"
+              >
+                Get started
+              </a>
             </div>
           ))}
         </div>

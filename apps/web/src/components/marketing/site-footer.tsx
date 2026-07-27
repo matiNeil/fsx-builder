@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { Logo } from "@/components/brand/logo";
 
 const COLUMNS: { heading: string; links: { label: string; href: string; external?: boolean }[] }[] = [
   {
@@ -8,6 +8,7 @@ const COLUMNS: { heading: string; links: { label: string; href: string; external
       { label: "Poster Generator", href: "/poster-generator" },
       { label: "Image Creator", href: "/image-creator" },
       { label: "All Features", href: "/#features" },
+      { label: "FSX.ai (for developers)", href: "https://fsx.ai", external: true },
     ],
   },
   {
@@ -49,10 +50,10 @@ const SOCIAL_ICONS: { label: string; path: string }[] = [
 export function SiteFooter() {
   return (
     <footer className="border-t border-zinc-200 px-6 py-12 dark:border-zinc-800 sm:px-10">
-      <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-6">
+      <div className="mx-auto grid max-w-[1440px] gap-10 sm:grid-cols-6">
         <div className="space-y-3 sm:col-span-2">
           <div className="inline-flex items-center">
-            <Image src="/logo-wordmark.png" alt="FSX Builder" width={754} height={301} className="h-12 w-auto" />
+            <Logo size="md" />
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             The all-in-one AI creative workspace for websites, posters, and images.
@@ -93,7 +94,7 @@ export function SiteFooter() {
           </div>
         ))}
       </div>
-      <p className="mx-auto mt-10 max-w-5xl border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-500">
+      <p className="mx-auto mt-10 max-w-[1440px] border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-500">
         Powered by{" "}
         <a
           href="https://www.forgestackx.com"

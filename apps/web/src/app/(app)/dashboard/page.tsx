@@ -46,7 +46,7 @@ export default async function DashboardPage() {
           planName={balance.plan.name}
           creditsRemaining={balance.creditsRemaining}
         />
-        <main className="mx-auto max-w-6xl space-y-8 px-6 py-8 sm:px-10">
+        <main className="w-full space-y-8 px-6 py-8 sm:px-10 xl:px-12">
           <QuickActions />
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <RecentProjects projects={projects} />

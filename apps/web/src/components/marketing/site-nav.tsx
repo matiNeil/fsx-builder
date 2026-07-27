@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { getInitials } from "@/lib/format";
+import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "./theme-toggle";
 
 const NAV_LINKS = [
@@ -19,9 +19,9 @@ export function SiteNav() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/70 backdrop-blur-md dark:border-zinc-800/60 dark:bg-zinc-950/70">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3 sm:px-10">
+      <nav className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-3 sm:px-10 lg:px-16">
         <Link href="/" className="flex items-center">
-          <Image src="/logo-wordmark.png" alt="FSX Builder" width={754} height={301} className="h-12 w-auto" priority />
+          <Logo size="sm" />
         </Link>
         <div className="hidden items-center gap-6 text-sm text-zinc-600 dark:text-zinc-400 md:flex">
           {NAV_LINKS.map((link) => (

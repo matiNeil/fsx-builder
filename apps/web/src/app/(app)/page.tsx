@@ -38,7 +38,7 @@ export default function Home() {
   return (
     <>
       <SiteNav />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-24 px-6 py-16 sm:px-10">
+      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-24 px-6 py-16 sm:px-10 lg:px-16">
         <section className="relative">
           <BackgroundFx />
           <div className="relative grid items-center gap-10 sm:grid-cols-2">
