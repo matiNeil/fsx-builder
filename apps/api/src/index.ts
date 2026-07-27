@@ -4,6 +4,14 @@ import multipart from "@fastify/multipart";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { hashPassword, mintApiToken, verifyApiToken, verifyPassword } from "./auth.js";
+import { InsufficientCreditsError, addMonths, canAfford, chargeCredits, getOrRefreshBalance } from "./credits.js";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    userId?: string;
+  }
+}
 
 const app = Fastify({ logger: true });
 let prisma: PrismaClient | null = null;
@@ -22,41 +30,21 @@ const getPrismaClient = (): PrismaClient | null => {
   }
 };
 
-const ensureSqliteSchema = async () => {
-  const db = getPrismaClient();
-  if (!db) {
-    return;
-  }
-
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "Project" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "name" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
-      "data" TEXT NOT NULL DEFAULT '{}',
-      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" DATETIME NOT NULL
-    );
-  `);
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "Asset" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "projectId" TEXT NOT NULL,
-      "filename" TEXT NOT NULL,
-      "mimeType" TEXT NOT NULL,
-      "path" TEXT NOT NULL,
-      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "Asset_projectId_fkey"
-        FOREIGN KEY ("projectId")
-        REFERENCES "Project" ("id")
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-    );
-  `);
-  await db.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "Asset_projectId_idx" ON "Asset"("projectId");
-  `);
+const dbUnavailable = {
+  error: "Database client unavailable",
+  message: "Prisma client is not initialized in this deployment.",
 };
+
+const projectNotFound = {
+  error: "Project not found",
+  message: "No project exists with the provided id.",
+};
+
+const insufficientCreditsResponse = (error: InsufficientCreditsError) => ({
+  error: "insufficient_credits",
+  required: error.required,
+  available: error.available,
+});
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(120),
@@ -66,26 +54,40 @@ const createProjectSchema = z.object({
 const aiImageSchema = z.object({
   prompt: z.string().min(3).max(1000),
   size: z.enum(["1024x1024", "1536x1024", "1024x1536"]).default("1024x1024"),
+  projectId: z.string().optional(),
 });
 const updateProjectSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
+  chargeAction: z.boolean().optional().default(false),
+});
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(200),
+  name: z.string().min(1).max(120).optional(),
+});
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
 });
 
 await app.register(cors, { origin: true });
 await app.register(multipart);
-app.addHook("onReady", async () => {
-  try {
-    await ensureSqliteSchema();
-  } catch (error) {
-    app.log.error(error, "Failed to ensure SQLite schema");
-  }
-});
+
 app.get("/", async () => ({
   ok: true,
   service: "fsx-api",
   message: "FSX Builder API is running.",
-  endpoints: ["/health", "/projects", "/ai/generate-image"],
+  endpoints: [
+    "/health",
+    "/auth/register",
+    "/auth/login",
+    "/projects",
+    "/projects/:id/published",
+    "/credits/costs",
+    "/credits/balance",
+    "/ai/generate-image",
+  ],
 }));
 
 app.get("/favicon.ico", async (_request, reply) => {
@@ -98,177 +100,362 @@ app.get("/health", async () => ({
   timestamp: new Date().toISOString(),
 }));
 
-app.get("/projects", async (_request, reply) => {
-  const db = getPrismaClient();
-  if (!db) {
-    return reply.status(503).send({
-      error: "Database client unavailable",
-      message: "Prisma client is not initialized in this deployment.",
-    });
-  }
-
-  return db.project.findMany({
-    orderBy: { updatedAt: "desc" },
-  });
-});
-
-app.post("/projects", async (request, reply) => {
-  const parsed = createProjectSchema.safeParse(request.body);
+app.post("/auth/register", async (request, reply) => {
+  const parsed = registerSchema.safeParse(request.body);
   if (!parsed.success) {
-    return reply.status(400).send({
-      error: "Invalid payload",
-      issues: parsed.error.issues,
-    });
+    return reply.status(400).send({ error: "Invalid payload", issues: parsed.error.issues });
   }
 
   const db = getPrismaClient();
   if (!db) {
-    return reply.status(503).send({
-      error: "Database client unavailable",
-      message: "Prisma client is not initialized in this deployment.",
+    return reply.status(503).send(dbUnavailable);
+  }
+
+  const existing = await db.user.findUnique({ where: { email: parsed.data.email } });
+  if (existing) {
+    return reply.status(409).send({
+      error: "Email already registered",
+      message: "An account with this email already exists.",
     });
   }
 
-  const project = await db.project.create({
-    data: {
-      name: parsed.data.name,
-      type: parsed.data.type,
-      data: JSON.stringify(parsed.data.data ?? {}),
-    },
+  const freePlan = await db.plan.findUnique({ where: { key: "free" } });
+  if (!freePlan || freePlan.monthlyCredits == null) {
+    return reply.status(500).send({
+      error: "Plans not configured",
+      message: "Run the seed script (npm run prisma:seed --workspace @fsx/api) before registering users.",
+    });
+  }
+
+  const passwordHash = await hashPassword(parsed.data.password);
+  const now = new Date();
+
+  const user = await db.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: { email: parsed.data.email, passwordHash, name: parsed.data.name },
+    });
+    const subscription = await tx.subscription.create({
+      data: {
+        userId: created.id,
+        planId: freePlan.id,
+        creditsRemaining: freePlan.monthlyCredits!,
+        currentPeriodStart: now,
+        currentPeriodEnd: addMonths(now, 1),
+      },
+    });
+    await tx.creditTransaction.create({
+      data: {
+        userId: created.id,
+        subscriptionId: subscription.id,
+        type: "GRANT",
+        amount: freePlan.monthlyCredits!,
+        reason: "SIGNUP_GRANT",
+      },
+    });
+    return created;
   });
 
-  return reply.status(201).send(project);
+  const apiToken = await mintApiToken(user.id);
+  return reply.status(201).send({ id: user.id, email: user.email, name: user.name, apiToken });
 });
 
-app.get("/projects/:id", async (request, reply) => {
+app.post("/auth/login", async (request, reply) => {
+  const parsed = loginSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.status(400).send({ error: "Invalid payload", issues: parsed.error.issues });
+  }
+
+  const db = getPrismaClient();
+  if (!db) {
+    return reply.status(503).send(dbUnavailable);
+  }
+
+  const user = await db.user.findUnique({ where: { email: parsed.data.email } });
+  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    return reply.status(401).send({
+      error: "Invalid credentials",
+      message: "Email or password is incorrect.",
+    });
+  }
+
+  const apiToken = await mintApiToken(user.id);
+  return reply.status(200).send({ id: user.id, email: user.email, name: user.name, apiToken });
+});
+
+app.get("/projects/:id/published", async (request, reply) => {
   const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
   if (!params.success) {
-    return reply.status(400).send({
-      error: "Invalid project id",
-      issues: params.error.issues,
-    });
+    return reply.status(400).send({ error: "Invalid project id", issues: params.error.issues });
   }
 
   const db = getPrismaClient();
   if (!db) {
-    return reply.status(503).send({
-      error: "Database client unavailable",
-      message: "Prisma client is not initialized in this deployment.",
-    });
+    return reply.status(503).send(dbUnavailable);
   }
 
-  const project = await db.project.findUnique({
-    where: { id: params.data.id },
-  });
-  if (!project) {
-    return reply.status(404).send({
-      error: "Project not found",
-      message: "No project exists with the provided id.",
-    });
+  const project = await db.project.findUnique({ where: { id: params.data.id } });
+  if (!project || project.type !== "website") {
+    return reply.status(404).send(projectNotFound);
   }
+
+  let publishedAt: unknown = null;
+  try {
+    publishedAt = (JSON.parse(project.data) as { publishedAt?: unknown }).publishedAt;
+  } catch {
+    publishedAt = null;
+  }
+
+  if (!publishedAt) {
+    return reply.status(404).send(projectNotFound);
+  }
+
   return reply.status(200).send(project);
 });
 
-app.put("/projects/:id", async (request, reply) => {
-  const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
-  if (!params.success) {
-    return reply.status(400).send({
-      error: "Invalid project id",
-      issues: params.error.issues,
-    });
-  }
-
-  const parsed = updateProjectSchema.safeParse(request.body);
-  if (!parsed.success) {
-    return reply.status(400).send({
-      error: "Invalid payload",
-      issues: parsed.error.issues,
-    });
-  }
-
-  if (!parsed.data.name && !parsed.data.data) {
-    return reply.status(400).send({
-      error: "No updates provided",
-      message: "Provide at least one field to update.",
-    });
-  }
-
+app.get("/credits/costs", async (_request, reply) => {
   const db = getPrismaClient();
   if (!db) {
-    return reply.status(503).send({
-      error: "Database client unavailable",
-      message: "Prisma client is not initialized in this deployment.",
-    });
+    return reply.status(503).send(dbUnavailable);
   }
 
-  try {
-    const project = await db.project.update({
-      where: { id: params.data.id },
-      data: {
-        ...(parsed.data.name ? { name: parsed.data.name } : {}),
-        ...(parsed.data.data ? { data: JSON.stringify(parsed.data.data) } : {}),
-      },
-    });
-    return reply.status(200).send(project);
-  } catch {
-    return reply.status(404).send({
-      error: "Project not found",
-      message: "No project exists with the provided id.",
-    });
-  }
+  const costs = await db.creditCost.findMany();
+  return reply.status(200).send(Object.fromEntries(costs.map((cost) => [cost.action, cost.credits])));
 });
 
-app.post("/ai/generate-image", async (request, reply) => {
-  const parsed = aiImageSchema.safeParse(request.body);
-  if (!parsed.success) {
-    return reply.status(400).send({
-      error: "Invalid payload",
-      issues: parsed.error.issues,
-    });
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return reply.status(501).send({
-      error: "AI image generation is not configured",
-      message: "Set OPENAI_API_KEY in apps/api/.env to enable this feature.",
-    });
-  }
-
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-image-1",
-      prompt: parsed.data.prompt,
-      size: parsed.data.size,
-    }),
+await app.register(async (protectedScope) => {
+  protectedScope.addHook("onRequest", async (request, reply) => {
+    const header = request.headers.authorization;
+    const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
+    if (!token) {
+      return reply.status(401).send({ error: "Unauthorized", message: "Missing bearer token." });
+    }
+    try {
+      const { userId } = await verifyApiToken(token);
+      request.userId = userId;
+    } catch {
+      return reply.status(401).send({ error: "Unauthorized", message: "Invalid or expired token." });
+    }
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    request.log.error({ errorBody }, "OpenAI image generation failed");
-    return reply.status(502).send({
-      error: "Failed to generate image",
-      message: "The AI provider returned an error.",
-    });
-  }
+  protectedScope.get("/credits/balance", async (request, reply) => {
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
 
-  const result = (await response.json()) as { data?: Array<{ b64_json?: string }> };
-  const imageBase64 = result.data?.[0]?.b64_json;
-  if (!imageBase64) {
-    return reply.status(502).send({
-      error: "Failed to generate image",
-      message: "The AI provider did not return image data.",
+    const subscription = await getOrRefreshBalance(db, request.userId!);
+    return reply.status(200).send({
+      plan: { key: subscription.plan.key, name: subscription.plan.name },
+      creditsRemaining: subscription.creditsRemaining,
+      creditsUsedThisPeriod: subscription.creditsUsedThisPeriod,
+      currentPeriodEnd: subscription.currentPeriodEnd,
     });
-  }
+  });
 
-  return reply.status(200).send({
-    imageDataUrl: `data:image/png;base64,${imageBase64}`,
-    provider: "openai",
+  protectedScope.get("/projects", async (request, reply) => {
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    return db.project.findMany({
+      where: { userId: request.userId },
+      orderBy: { updatedAt: "desc" },
+    });
+  });
+
+  protectedScope.post("/projects", async (request, reply) => {
+    const parsed = createProjectSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid payload", issues: parsed.error.issues });
+    }
+
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    const chargeAction =
+      parsed.data.type === "website"
+        ? "website.create"
+        : parsed.data.type === "poster"
+          ? "poster.generate"
+          : null;
+
+    try {
+      const result = await db.$transaction(async (tx) => {
+        const project = await tx.project.create({
+          data: {
+            userId: request.userId!,
+            name: parsed.data.name,
+            type: parsed.data.type,
+            data: JSON.stringify(parsed.data.data ?? {}),
+          },
+        });
+
+        const subscription = chargeAction
+          ? await chargeCredits(tx, request.userId!, chargeAction, { relatedProjectId: project.id })
+          : await getOrRefreshBalance(tx, request.userId!);
+
+        return { project, creditsRemaining: subscription.creditsRemaining };
+      });
+
+      return reply.status(201).send({ ...result.project, creditsRemaining: result.creditsRemaining });
+    } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        return reply.status(402).send(insufficientCreditsResponse(error));
+      }
+      throw error;
+    }
+  });
+
+  protectedScope.get("/projects/:id", async (request, reply) => {
+    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    if (!params.success) {
+      return reply.status(400).send({ error: "Invalid project id", issues: params.error.issues });
+    }
+
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    const project = await db.project.findUnique({ where: { id: params.data.id } });
+    if (!project || project.userId !== request.userId) {
+      return reply.status(404).send(projectNotFound);
+    }
+    return reply.status(200).send(project);
+  });
+
+  protectedScope.put("/projects/:id", async (request, reply) => {
+    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    if (!params.success) {
+      return reply.status(400).send({ error: "Invalid project id", issues: params.error.issues });
+    }
+
+    const parsed = updateProjectSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid payload", issues: parsed.error.issues });
+    }
+
+    if (!parsed.data.name && !parsed.data.data) {
+      return reply.status(400).send({
+        error: "No updates provided",
+        message: "Provide at least one field to update.",
+      });
+    }
+
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    const existing = await db.project.findUnique({ where: { id: params.data.id } });
+    if (!existing || existing.userId !== request.userId) {
+      return reply.status(404).send(projectNotFound);
+    }
+
+    try {
+      const result = await db.$transaction(async (tx) => {
+        const project = await tx.project.update({
+          where: { id: params.data.id },
+          data: {
+            ...(parsed.data.name ? { name: parsed.data.name } : {}),
+            ...(parsed.data.data ? { data: JSON.stringify(parsed.data.data) } : {}),
+          },
+        });
+
+        const subscription = parsed.data.chargeAction
+          ? await chargeCredits(tx, request.userId!, `${existing.type}.edit`, { relatedProjectId: project.id })
+          : await getOrRefreshBalance(tx, request.userId!);
+
+        return { project, creditsRemaining: subscription.creditsRemaining };
+      });
+
+      return reply.status(200).send({ ...result.project, creditsRemaining: result.creditsRemaining });
+    } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        return reply.status(402).send(insufficientCreditsResponse(error));
+      }
+      throw error;
+    }
+  });
+
+  protectedScope.post("/ai/generate-image", async (request, reply) => {
+    const parsed = aiImageSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid payload", issues: parsed.error.issues });
+    }
+
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    const affordability = await canAfford(db, request.userId!, "image.generate");
+    if (!affordability.ok) {
+      return reply.status(402).send({
+        error: "insufficient_credits",
+        required: affordability.required,
+        available: affordability.available,
+      });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return reply.status(501).send({
+        error: "AI image generation is not configured",
+        message: "Set OPENAI_API_KEY in apps/api/.env to enable this feature.",
+      });
+    }
+
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-image-1",
+        prompt: parsed.data.prompt,
+        size: parsed.data.size,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      request.log.error({ errorBody }, "OpenAI image generation failed");
+      return reply.status(502).send({
+        error: "Failed to generate image",
+        message: "The AI provider returned an error.",
+      });
+    }
+
+    const result = (await response.json()) as { data?: Array<{ b64_json?: string }> };
+    const imageBase64 = result.data?.[0]?.b64_json;
+    if (!imageBase64) {
+      return reply.status(502).send({
+        error: "Failed to generate image",
+        message: "The AI provider did not return image data.",
+      });
+    }
+
+    try {
+      const subscription = await chargeCredits(db, request.userId!, "image.generate", {
+        relatedProjectId: parsed.data.projectId,
+      });
+
+      return reply.status(200).send({
+        imageDataUrl: `data:image/png;base64,${imageBase64}`,
+        provider: "openai",
+        creditsRemaining: subscription.creditsRemaining,
+      });
+    } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        return reply.status(402).send(insufficientCreditsResponse(error));
+      }
+      throw error;
+    }
   });
 });
 

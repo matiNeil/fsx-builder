@@ -2,6 +2,7 @@
 
 import Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import useImage from "use-image";
 import { Image as KonvaImage, Layer, Rect, Stage, Text } from "react-konva";
 import type { Filter } from "konva/lib/Node";
@@ -13,6 +14,8 @@ import {
 } from "../_lib/use-image-creator-store";
 import { createImageProjectState, loadImageProjectState } from "@/lib/image-project-state";
 import { ProjectSaveStatus } from "@/components/project-save-status";
+import { CreditsIndicator } from "@/components/credits-indicator";
+import { fetchBalance, fetchCreditCosts, type CreditCosts } from "@/lib/credits";
 
 type ImageProject = {
   id: string;
@@ -103,6 +106,18 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000";
 
 export function ImageCreatorEditor() {
+  const { data: session } = useSession();
+  const apiToken = session?.apiToken;
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    const headers: Record<string, string> = {};
+    if (apiToken) {
+      headers.Authorization = `Bearer ${apiToken}`;
+    }
+    return headers;
+  }, [apiToken]);
+  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
+  const [creditCosts, setCreditCosts] = useState<CreditCosts>({});
+
   const stageRef = useRef<Konva.Stage>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [aiPrompt, setAiPrompt] = useState("A vibrant tech event poster style background");
@@ -159,10 +174,13 @@ export function ImageCreatorEditor() {
     Boolean(activeProjectId && lastSavedSnapshot) && currentSnapshot !== lastSavedSnapshot;
 
   const fetchProjects = useCallback(async () => {
+    if (!apiToken) {
+      return;
+    }
     setIsLoadingProjects(true);
     setProjectError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`);
+      const response = await fetch(`${API_BASE_URL}/projects`, { headers: authHeaders });
       const payload = (await response.json()) as
         | ImageProject[]
         | { error?: string; message?: string };
@@ -182,7 +200,7 @@ export function ImageCreatorEditor() {
     } finally {
       setIsLoadingProjects(false);
     }
-  }, []);
+  }, [apiToken, authHeaders]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -192,6 +210,21 @@ export function ImageCreatorEditor() {
       window.clearTimeout(timer);
     };
   }, [fetchProjects]);
+
+  useEffect(() => {
+    void fetchCreditCosts()
+      .then(setCreditCosts)
+      .catch(() => setCreditCosts({}));
+  }, []);
+
+  useEffect(() => {
+    if (!apiToken) {
+      return;
+    }
+    void fetchBalance(apiToken)
+      .then((balance) => setCreditsRemaining(balance.creditsRemaining))
+      .catch(() => undefined);
+  }, [apiToken]);
 
   const persistProject = useCallback(
     async (method: "POST" | "PUT", projectId?: string, silent = false) => {
@@ -219,6 +252,7 @@ export function ImageCreatorEditor() {
           method,
           headers: {
             "Content-Type": "application/json",
+            ...authHeaders,
           },
           body: JSON.stringify(
             method === "POST"
@@ -230,19 +264,31 @@ export function ImageCreatorEditor() {
               : {
                   name: normalizedName,
                   data: payloadData,
+                  chargeAction: !silent,
                 }
           ),
         });
 
         const payload = (await response.json()) as
-          | ImageProject
-          | { error?: string; message?: string };
+          | (ImageProject & { creditsRemaining?: number })
+          | { error?: string; message?: string; required?: number; available?: number };
         if (!response.ok || !("id" in payload)) {
+          if (response.status === 402 && "required" in payload) {
+            if (typeof payload.available === "number") {
+              setCreditsRemaining(payload.available);
+            }
+            throw new Error(
+              `Not enough credits to save (need ${payload.required}, have ${payload.available}).`
+            );
+          }
           const errorMessage =
             !("id" in payload) && payload.message
               ? payload.message
               : "Failed to save image project.";
           throw new Error(errorMessage);
+        }
+        if (typeof payload.creditsRemaining === "number") {
+          setCreditsRemaining(payload.creditsRemaining);
         }
         setActiveProjectId(payload.id);
         setLastSavedSnapshot(
@@ -269,7 +315,7 @@ export function ImageCreatorEditor() {
         }
       }
     },
-    [projectName, document, selectedLayerId, imageAdjustments, fetchProjects, setDocumentName]
+    [projectName, document, selectedLayerId, imageAdjustments, fetchProjects, setDocumentName, authHeaders]
   );
 
   const onOpenProject = (project: ImageProject) => {
@@ -372,16 +418,35 @@ export function ImageCreatorEditor() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
         },
         body: JSON.stringify({
           prompt: aiPrompt.trim(),
           size: "1024x1024",
+          projectId: activeProjectId ?? undefined,
         }),
       });
 
-      const payload = (await response.json()) as { imageDataUrl?: string; message?: string };
+      const payload = (await response.json()) as {
+        imageDataUrl?: string;
+        message?: string;
+        creditsRemaining?: number;
+        required?: number;
+        available?: number;
+      };
       if (!response.ok || !payload.imageDataUrl) {
+        if (response.status === 402 && typeof payload.required === "number") {
+          if (typeof payload.available === "number") {
+            setCreditsRemaining(payload.available);
+          }
+          throw new Error(
+            `Not enough credits to generate an image (need ${payload.required}, have ${payload.available}).`
+          );
+        }
         throw new Error(payload.message ?? "Image generation failed.");
+      }
+      if (typeof payload.creditsRemaining === "number") {
+        setCreditsRemaining(payload.creditsRemaining);
       }
       addImageLayer(payload.imageDataUrl, "AI Generated");
     } catch (error) {
@@ -429,12 +494,21 @@ export function ImageCreatorEditor() {
               </button>
               <button
                 className="rounded-md border border-zinc-300 px-2.5 py-2 text-xs disabled:opacity-60 dark:border-zinc-700"
-                disabled={isSavingProject || !activeProjectId}
+                disabled={
+                  isSavingProject ||
+                  !activeProjectId ||
+                  (creditsRemaining !== null && creditsRemaining < (creditCosts["image.edit"] ?? 0))
+                }
                 onClick={() => void persistProject("PUT", activeProjectId ?? undefined)}
               >
-                Save state
+                {`Save state${creditCosts["image.edit"] ? ` (${creditCosts["image.edit"]}c)` : ""}`}
               </button>
             </div>
+            <CreditsIndicator
+              creditsRemaining={creditsRemaining}
+              requiredForAction={activeProjectId ? creditCosts["image.edit"] : undefined}
+              actionLabel="save changes"
+            />
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -516,10 +590,15 @@ export function ImageCreatorEditor() {
             />
             <button
               className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isGenerating}
+              disabled={
+                isGenerating ||
+                (creditsRemaining !== null && creditsRemaining < (creditCosts["image.generate"] ?? 0))
+              }
               onClick={onGenerateAiImage}
             >
-              {isGenerating ? "Generating..." : "Generate with AI"}
+              {isGenerating
+                ? "Generating..."
+                : `Generate with AI${creditCosts["image.generate"] ? ` (${creditCosts["image.generate"]} credits)` : ""}`}
             </button>
             {aiError ? <p className="text-xs text-red-500">{aiError}</p> : null}
           </div>

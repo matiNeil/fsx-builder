@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   getTemplatesByType,
   getWebsiteTemplateCategory,
@@ -17,6 +18,8 @@ import {
   type WebsiteProjectState,
 } from "@/lib/website-project-state";
 import { ProjectSaveStatus } from "@/components/project-save-status";
+import { CreditsIndicator } from "@/components/credits-indicator";
+import { fetchBalance, fetchCreditCosts, type CreditCosts } from "@/lib/credits";
 
 type WebsiteProject = {
   id: string;
@@ -56,6 +59,18 @@ const isTypingInInput = (eventTarget: EventTarget | null) => {
 };
 
 export default function WebsiteBuilderPage() {
+  const { data: session } = useSession();
+  const apiToken = session?.apiToken;
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    const headers: Record<string, string> = {};
+    if (apiToken) {
+      headers.Authorization = `Bearer ${apiToken}`;
+    }
+    return headers;
+  }, [apiToken]);
+  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
+  const [creditCosts, setCreditCosts] = useState<CreditCosts>({});
+
   const websiteTemplates = getTemplatesByType("website");
   const categories = useMemo(
     () => ["All", ...listWebsiteTemplateCategories()] as Array<"All" | WebsiteTemplateCategory>,
@@ -121,10 +136,13 @@ export default function WebsiteBuilderPage() {
     Boolean(activeProjectId && lastSavedSnapshot) && currentSnapshot !== lastSavedSnapshot;
 
   const fetchProjects = useCallback(async () => {
+    if (!apiToken) {
+      return;
+    }
     setIsLoadingProjects(true);
     setProjectError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`);
+      const response = await fetch(`${API_BASE_URL}/projects`, { headers: authHeaders });
       const payload = (await response.json()) as
         | WebsiteProject[]
         | { error?: string; message?: string };
@@ -144,7 +162,7 @@ export default function WebsiteBuilderPage() {
     } finally {
       setIsLoadingProjects(false);
     }
-  }, []);
+  }, [apiToken, authHeaders]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -152,6 +170,21 @@ export default function WebsiteBuilderPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [fetchProjects]);
+
+  useEffect(() => {
+    void fetchCreditCosts()
+      .then(setCreditCosts)
+      .catch(() => setCreditCosts({}));
+  }, []);
+
+  useEffect(() => {
+    if (!apiToken) {
+      return;
+    }
+    void fetchBalance(apiToken)
+      .then((balance) => setCreditsRemaining(balance.creditsRemaining))
+      .catch(() => undefined);
+  }, [apiToken]);
 
   const persistCurrentState = useCallback(
     async (silent = false, publishedAt?: string | null) => {
@@ -184,21 +217,34 @@ export default function WebsiteBuilderPage() {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
+            ...authHeaders,
           },
           body: JSON.stringify({
             name,
             data: payloadData,
+            chargeAction: !silent,
           }),
         });
         const payload = (await response.json()) as
-          | WebsiteProject
-          | { error?: string; message?: string };
+          | (WebsiteProject & { creditsRemaining?: number })
+          | { error?: string; message?: string; required?: number; available?: number };
         if (!response.ok || !("id" in payload)) {
+          if (response.status === 402 && "required" in payload) {
+            if (typeof payload.available === "number") {
+              setCreditsRemaining(payload.available);
+            }
+            throw new Error(
+              `Not enough credits to save (need ${payload.required}, have ${payload.available}).`
+            );
+          }
           const errorMessage =
             !("id" in payload) && payload.message
               ? payload.message
               : "Failed to save project state.";
           throw new Error(errorMessage);
+        }
+        if (typeof payload.creditsRemaining === "number") {
+          setCreditsRemaining(payload.creditsRemaining);
         }
         setLastSavedSnapshot(
           JSON.stringify({
@@ -225,7 +271,7 @@ export default function WebsiteBuilderPage() {
         }
       }
     },
-    [activeProjectId, projectName, createProjectStatePayload, fetchProjects]
+    [activeProjectId, projectName, createProjectStatePayload, fetchProjects, authHeaders]
   );
 
   const onCreateProject = useCallback(async () => {
@@ -244,6 +290,7 @@ export default function WebsiteBuilderPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
         },
         body: JSON.stringify({
           name,
@@ -252,9 +299,17 @@ export default function WebsiteBuilderPage() {
         }),
       });
       const payload = (await response.json()) as
-        | WebsiteProject
-        | { error?: string; message?: string };
+        | (WebsiteProject & { creditsRemaining?: number })
+        | { error?: string; message?: string; required?: number; available?: number };
       if (!response.ok || !("id" in payload)) {
+        if (response.status === 402 && "required" in payload) {
+          if (typeof payload.available === "number") {
+            setCreditsRemaining(payload.available);
+          }
+          throw new Error(
+            `Not enough credits to create a website (need ${payload.required}, have ${payload.available}).`
+          );
+        }
         const errorMessage =
           !("id" in payload) && payload.message
             ? payload.message
@@ -262,6 +317,9 @@ export default function WebsiteBuilderPage() {
         throw new Error(errorMessage);
       }
 
+      if (typeof payload.creditsRemaining === "number") {
+        setCreditsRemaining(payload.creditsRemaining);
+      }
       setActiveProjectId(payload.id);
       setLastSavedSnapshot(
         JSON.stringify({
@@ -279,7 +337,7 @@ export default function WebsiteBuilderPage() {
     } finally {
       setIsSavingProject(false);
     }
-  }, [projectName, createProjectStatePayload, fetchProjects]);
+  }, [projectName, createProjectStatePayload, fetchProjects, authHeaders]);
 
   const onOpenProject = (project: WebsiteProject) => {
     const projectState = loadWebsiteProjectState(project.data, websiteTemplates);
@@ -513,6 +571,11 @@ export default function WebsiteBuilderPage() {
           lastSavedAt={lastSavedAt}
           shortcutHint={`${shortcutModifier}+S save, Shift+${shortcutModifier}+N add page, Shift+${shortcutModifier}+B add section, Shift+${shortcutModifier}+P publish.`}
         />
+        <CreditsIndicator
+          creditsRemaining={creditsRemaining}
+          requiredForAction={activeProjectId ? creditCosts["website.edit"] : creditCosts["website.create"]}
+          actionLabel={activeProjectId ? "save changes" : "create a website"}
+        />
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
@@ -524,23 +587,36 @@ export default function WebsiteBuilderPage() {
           <button
             type="button"
             onClick={() => void onCreateProject()}
-            disabled={isSavingProject}
+            disabled={
+              isSavingProject ||
+              (creditsRemaining !== null && creditsRemaining < (creditCosts["website.create"] ?? 0))
+            }
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSavingProject ? "Saving..." : "Save Project"}
+            {isSavingProject
+              ? "Saving..."
+              : `Save Project${creditCosts["website.create"] ? ` (${creditCosts["website.create"]} credits)` : ""}`}
           </button>
           <button
             type="button"
             onClick={() => void persistCurrentState(false)}
-            disabled={isSavingProject || !activeProjectId}
+            disabled={
+              isSavingProject ||
+              !activeProjectId ||
+              (creditsRemaining !== null && creditsRemaining < (creditCosts["website.edit"] ?? 0))
+            }
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700"
           >
-            Save Builder State
+            {`Save Builder State${creditCosts["website.edit"] ? ` (${creditCosts["website.edit"]} credits)` : ""}`}
           </button>
           <button
             type="button"
             onClick={() => void onPublish()}
-            disabled={isSavingProject || !activeProjectId}
+            disabled={
+              isSavingProject ||
+              !activeProjectId ||
+              (creditsRemaining !== null && creditsRemaining < (creditCosts["website.edit"] ?? 0))
+            }
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             Publish Live

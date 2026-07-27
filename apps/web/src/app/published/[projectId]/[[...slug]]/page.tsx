@@ -19,7 +19,7 @@ export default async function PublishedWebsitePage({
   params: Promise<Params>;
 }) {
   const { projectId, slug } = await params;
-  const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/published`, {
     cache: "no-store",
   });
 

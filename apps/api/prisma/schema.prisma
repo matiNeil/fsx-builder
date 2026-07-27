@@ -3,18 +3,91 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model Project {
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  passwordHash       String
+  name               String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  projects           Project[]
+  subscription       Subscription?
+  creditTransactions CreditTransaction[]
+}
+
+model Plan {
+  id                  String         @id @default(cuid())
+  key                 String         @unique
+  name                String
+  priceCents          Int?
+  monthlyCredits      Int?
+  customDomainAllowed Boolean        @default(false)
+  priorityGeneration  Boolean        @default(false)
+  teamWorkspace       Boolean        @default(false)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  subscriptions       Subscription[]
+}
+
+model Subscription {
+  id                    String              @id @default(cuid())
+  userId                String              @unique
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  Plan                @relation(fields: [planId], references: [id])
+  status                String              @default("active")
+  creditsRemaining      Int
+  creditsUsedThisPeriod Int                 @default(0)
+  currentPeriodStart    DateTime            @default(now())
+  currentPeriodEnd      DateTime
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  creditTransactions    CreditTransaction[]
+
+  @@index([planId])
+}
+
+model CreditTransaction {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId   String?
+  subscription     Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  type             String
+  amount           Int
+  reason           String
+  relatedProjectId String?
+  relatedProject   Project?      @relation(fields: [relatedProjectId], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now())
+
+  @@index([userId, createdAt])
+  @@index([relatedProjectId])
+}
+
+model CreditCost {
   id        String   @id @default(cuid())
-  name      String
-  type      String
-  data      String   @default("{}")
-  assets    Asset[]
-  createdAt DateTime @default(now())
+  action    String   @unique
+  credits   Int
   updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id                 String              @id @default(cuid())
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  type               String
+  data               String              @default("{}")
+  assets             Asset[]
+  creditTransactions CreditTransaction[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([userId])
 }
 
 model Asset {
