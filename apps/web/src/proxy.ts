@@ -17,6 +17,7 @@ export const config = {
     "/website-builder/:path*",
     "/poster-generator/:path*",
     "/image-creator/:path*",
+    "/dashboard/:path*",
     "/account",
   ],
 };

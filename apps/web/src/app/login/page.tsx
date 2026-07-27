@@ -25,7 +25,7 @@ function LoginForm() {
       setError("Invalid email or password.");
       return;
     }
-    router.push(searchParams.get("callbackUrl") ?? "/website-builder");
+    router.push(searchParams.get("callbackUrl") ?? "/dashboard");
     router.refresh();
   };
 

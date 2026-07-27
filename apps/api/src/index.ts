@@ -86,6 +86,7 @@ app.get("/", async () => ({
     "/projects/:id/published",
     "/credits/costs",
     "/credits/balance",
+    "/credits/usage-breakdown",
     "/ai/generate-image",
   ],
 }));
@@ -245,11 +246,41 @@ await app.register(async (protectedScope) => {
 
     const subscription = await getOrRefreshBalance(db, request.userId!);
     return reply.status(200).send({
-      plan: { key: subscription.plan.key, name: subscription.plan.name },
+      plan: {
+        key: subscription.plan.key,
+        name: subscription.plan.name,
+        monthlyCredits: subscription.plan.monthlyCredits,
+      },
       creditsRemaining: subscription.creditsRemaining,
       creditsUsedThisPeriod: subscription.creditsUsedThisPeriod,
       currentPeriodEnd: subscription.currentPeriodEnd,
     });
+  });
+
+  protectedScope.get("/credits/usage-breakdown", async (request, reply) => {
+    const db = getPrismaClient();
+    if (!db) {
+      return reply.status(503).send(dbUnavailable);
+    }
+
+    const transactions = await db.creditTransaction.findMany({
+      where: { userId: request.userId, type: "SPEND" },
+      select: { reason: true, amount: true },
+    });
+
+    const breakdown: Record<"website" | "poster" | "image", number> = {
+      website: 0,
+      poster: 0,
+      image: 0,
+    };
+    for (const transaction of transactions) {
+      const category = transaction.reason.split(".")[0];
+      if (category === "website" || category === "poster" || category === "image") {
+        breakdown[category] += Math.abs(transaction.amount);
+      }
+    }
+
+    return reply.status(200).send(breakdown);
   });
 
   protectedScope.get("/projects", async (request, reply) => {

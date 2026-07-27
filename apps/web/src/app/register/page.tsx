@@ -40,7 +40,7 @@ export default function RegisterPage() {
       router.push("/login");
       return;
     }
-    router.push("/website-builder");
+    router.push("/dashboard");
     router.refresh();
   };
 
