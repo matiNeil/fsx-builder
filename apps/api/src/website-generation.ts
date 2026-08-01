@@ -231,6 +231,17 @@ export async function generateWebsiteContent(
 
   const rawSections = Array.isArray(parsed?.sections) ? (parsed!.sections as unknown[]) : [];
 
+  /**
+   * The model is asked to reply with fields flattened next to "index", but
+   * JSON-mode instruction-following isn't guaranteed — it sometimes mirrors
+   * the input's {index, type, current: {...}} shape instead. Tolerate both
+   * rather than silently discarding a well-formed-but-nested reply.
+   */
+  const normalizeCandidate = (raw: Record<string, unknown>): Record<string, unknown> => {
+    const { index: _index, type: _type, current, ...rest } = raw;
+    return current && typeof current === "object" ? { ...rest, ...(current as Record<string, unknown>) } : rest;
+  };
+
   for (const rawSection of rawSections) {
     if (!rawSection || typeof rawSection !== "object") {
       continue;
@@ -245,7 +256,7 @@ export async function generateWebsiteContent(
     if (!schema) {
       continue;
     }
-    const validation = schema.safeParse(candidate);
+    const validation = schema.safeParse(normalizeCandidate(candidate));
     if (!validation.success) {
       logger.warn(
         { index, type: ref.type, issues: validation.error.issues },
