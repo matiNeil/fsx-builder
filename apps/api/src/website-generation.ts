@@ -97,7 +97,8 @@ export const listSelectableThemes = () =>
 async function callOpenAiJson(
   apiKey: string,
   messages: { role: "system" | "user"; content: string }[],
-  options: { temperature: number; maxTokens: number }
+  options: { temperature: number; maxTokens: number },
+  logger?: Logger
 ): Promise<Record<string, unknown> | null> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -112,18 +113,21 @@ async function callOpenAiJson(
   });
 
   if (!response.ok) {
+    logger?.warn({ status: response.status, body: await response.text().catch(() => null) }, "OpenAI request failed");
     return null;
   }
 
   const result = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const raw = result.choices?.[0]?.message?.content;
   if (!raw) {
+    logger?.warn({ result }, "OpenAI response had no message content");
     return null;
   }
 
   try {
     return JSON.parse(raw) as Record<string, unknown>;
   } catch {
+    logger?.warn({ raw }, "Failed to parse OpenAI response as JSON");
     return null;
   }
 }
@@ -209,14 +213,20 @@ export async function generateWebsiteContent(
         role: "system",
         content:
           "You write real marketing copy for a small business website, replacing placeholder template copy. " +
-          "You are given a list of sections with their type and current placeholder content. " +
-          'Respond with strict JSON: {"sections": [{"index": number, ...fields matching that section\'s current content}]}. ' +
-          "Only include the fields already present in each section's current content — never add a type field, " +
-          "never invent new sections, never write fabricated statistics, named employees, testimonials, prices, or contact details.",
+          "You are given a list of sections; each has an index, a type, and its current placeholder content " +
+          'nested under a "current" key — that nesting is only how the input is shown to you, not how you should reply. ' +
+          "Respond with strict JSON: {\"sections\": [{\"index\": number, ...fields}]}. " +
+          "Each entry must have the section's fields flattened directly next to \"index\" — do NOT nest them under a " +
+          '"current" key, and do NOT include a "type" field. For example, given an input section ' +
+          '{"index": 0, "type": "hero", "current": {"heading": "placeholder"}}, a correct reply entry is ' +
+          '{"index": 0, "heading": "your new heading"} — not {"index": 0, "type": "hero", "current": {"heading": "..."}}. ' +
+          "Only include the fields already present in each section's current content. " +
+          "Never invent new sections, never write fabricated statistics, named employees, testimonials, prices, or contact details.",
       },
       { role: "user", content: `Business description: ${description}\n\nSections:\n${JSON.stringify(promptSections)}` },
     ],
-    { temperature: 0.7, maxTokens: 1500 }
+    { temperature: 0.7, maxTokens: 1500 },
+    logger
   );
 
   const rawSections = Array.isArray(parsed?.sections) ? (parsed!.sections as unknown[]) : [];
