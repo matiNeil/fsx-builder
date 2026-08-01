@@ -17,6 +17,12 @@ const ACTIONS = [
     href: "/image-creator",
     color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
   },
+  {
+    label: "AI Assistant",
+    description: "Generate a full site from a description",
+    href: "/website-studio/new",
+    color: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
+  },
 ];
 
 export function QuickActions() {
@@ -35,13 +41,6 @@ export function QuickActions() {
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{action.description}</p>
         </a>
       ))}
-      <div className="rounded-xl border border-dashed border-zinc-300 p-4 opacity-60 dark:border-zinc-700">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/15 text-lg font-semibold text-purple-600 dark:text-purple-400">
-          ✦
-        </span>
-        <p className="mt-3 text-sm font-medium">AI Assistant</p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Coming soon</p>
-      </div>
     </section>
   );
 }
