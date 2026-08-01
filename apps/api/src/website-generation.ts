@@ -117,11 +117,8 @@ async function callOpenAiJson(
     return null;
   }
 
-  const result = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-  };
+  const result = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const raw = result.choices?.[0]?.message?.content;
-  console.error("[DEBUG] finish_reason:", result.choices?.[0]?.finish_reason, "raw:", raw);
   if (!raw) {
     logger?.warn({ result }, "OpenAI response had no message content");
     return null;
@@ -224,15 +221,16 @@ export async function generateWebsiteContent(
           '{"index": 0, "type": "hero", "current": {"heading": "placeholder"}}, a correct reply entry is ' +
           '{"index": 0, "heading": "your new heading"} — not {"index": 0, "type": "hero", "current": {"heading": "..."}}. ' +
           "Only include the fields already present in each section's current content. " +
-          "Never invent new sections, never write fabricated statistics, named employees, testimonials, prices, or contact details.",
+          "Never invent new sections, never write fabricated statistics, named employees, testimonials, prices, or contact details. " +
+          "The current content is placeholder text from an unrelated demo business — you must rewrite every field in your " +
+          "own words to reflect the actual business description given below. Do not return any field's placeholder text " +
+          "unchanged, even partially; a brand name is the one exception, since renaming the business isn't your call to make.",
       },
       { role: "user", content: `Business description: ${description}\n\nSections:\n${JSON.stringify(promptSections)}` },
     ],
     { temperature: 0.7, maxTokens: 1500 },
     logger
   );
-
-  console.error("[DEBUG] parsed is null:", parsed === null, "parsed:", JSON.stringify(parsed));
 
   const rawSections = Array.isArray(parsed?.sections) ? (parsed!.sections as unknown[]) : [];
 
