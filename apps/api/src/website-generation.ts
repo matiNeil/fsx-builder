@@ -229,11 +229,7 @@ export async function generateWebsiteContent(
     logger
   );
 
-  console.error("[DEBUG generateWebsiteContent] parsed:", JSON.stringify(parsed));
-
   const rawSections = Array.isArray(parsed?.sections) ? (parsed!.sections as unknown[]) : [];
-
-  console.error("[DEBUG generateWebsiteContent] rawSections.length:", rawSections.length);
 
   for (const rawSection of rawSections) {
     if (!rawSection || typeof rawSection !== "object") {
@@ -251,19 +247,12 @@ export async function generateWebsiteContent(
     }
     const validation = schema.safeParse(candidate);
     if (!validation.success) {
-      console.error(
-        "[DEBUG generateWebsiteContent] validation failed for index",
-        index,
-        ref.type,
-        JSON.stringify(validation.error.issues)
-      );
       logger.warn(
         { index, type: ref.type, issues: validation.error.issues },
         "Discarding invalid AI section copy, keeping template default"
       );
       continue;
     }
-    console.error("[DEBUG generateWebsiteContent] applying to index", index, ref.type, JSON.stringify(validation.data));
     Object.assign(pages[ref.pageIndex]!.sections[ref.sectionIndex]!, validation.data);
   }
 
