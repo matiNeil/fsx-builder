@@ -117,8 +117,11 @@ async function callOpenAiJson(
     return null;
   }
 
-  const result = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const result = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
   const raw = result.choices?.[0]?.message?.content;
+  console.error("[DEBUG] finish_reason:", result.choices?.[0]?.finish_reason, "raw:", raw);
   if (!raw) {
     logger?.warn({ result }, "OpenAI response had no message content");
     return null;
@@ -228,6 +231,8 @@ export async function generateWebsiteContent(
     { temperature: 0.7, maxTokens: 1500 },
     logger
   );
+
+  console.error("[DEBUG] parsed is null:", parsed === null, "parsed:", JSON.stringify(parsed));
 
   const rawSections = Array.isArray(parsed?.sections) ? (parsed!.sections as unknown[]) : [];
 
