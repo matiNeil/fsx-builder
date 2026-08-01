@@ -139,6 +139,7 @@ app.get("/", async () => ({
     "/auth/login",
     "/projects",
     "/projects/:id/published",
+    "/projects/:id/preview",
     "/credits/costs",
     "/credits/balance",
     "/credits/usage-breakdown",
@@ -247,6 +248,11 @@ app.post("/auth/login", async (request, reply) => {
   return reply.status(200).send({ id: user.id, email: user.email, name: user.name, apiToken });
 });
 
+const findWebsiteProject = async (db: PrismaClient, id: string) => {
+  const project = await db.project.findUnique({ where: { id } });
+  return project && project.type === "website" ? project : null;
+};
+
 const buildPublishedPayload = (project: NonNullable<Awaited<ReturnType<PrismaClient["project"]["findUnique"]>>>) => {
   let publishedAt: unknown = null;
   try {
@@ -277,8 +283,8 @@ app.get("/projects/:id/published", async (request, reply) => {
     return reply.status(503).send(dbUnavailable);
   }
 
-  const project = await db.project.findUnique({ where: { id: params.data.id } });
-  if (!project || project.type !== "website") {
+  const project = await findWebsiteProject(db, params.data.id);
+  if (!project) {
     return reply.status(404).send(projectNotFound);
   }
 
@@ -288,6 +294,25 @@ app.get("/projects/:id/published", async (request, reply) => {
   }
 
   return reply.status(200).send(payload);
+});
+
+app.get("/projects/:id/preview", async (request, reply) => {
+  const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+  if (!params.success) {
+    return reply.status(400).send({ error: "Invalid project id", issues: params.error.issues });
+  }
+
+  const db = getPrismaClient();
+  if (!db) {
+    return reply.status(503).send(dbUnavailable);
+  }
+
+  const project = await findWebsiteProject(db, params.data.id);
+  if (!project) {
+    return reply.status(404).send(projectNotFound);
+  }
+
+  return reply.status(200).send({ id: project.id, name: project.name, type: project.type, data: project.data });
 });
 
 app.get("/published/by-domain/:hostname", async (request, reply) => {

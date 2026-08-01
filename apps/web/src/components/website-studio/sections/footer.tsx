@@ -52,15 +52,20 @@ export function FooterRenderer({ section }: { section: Instance }) {
 export function FooterEditor({ section, onChange }: { section: Instance; onChange: (next: Instance) => void }) {
   return (
     <div className="space-y-4">
-      <TextField label="Brand name" value={section.brand} onChange={(brand) => onChange({ ...section, brand })} />
+      <TextField label="Business name" value={section.brand} onChange={(brand) => onChange({ ...section, brand })} />
       <ArrayField
-        label="Columns"
+        label="Link groups"
+        description='Group related links together, e.g. "Company" with About/Careers/Contact.'
         items={section.columns}
         onChange={(columns) => onChange({ ...section, columns })}
         createItem={() => ({ heading: "New column", links: [] })}
         renderItem={(column, _index, update) => (
           <>
-            <TextField label="Heading" value={column.heading} onChange={(heading) => update({ ...column, heading })} />
+            <TextField
+              label="Group title"
+              value={column.heading}
+              onChange={(heading) => update({ ...column, heading })}
+            />
             <ArrayField
               label="Links"
               items={column.links}
@@ -68,8 +73,13 @@ export function FooterEditor({ section, onChange }: { section: Instance; onChang
               createItem={() => ({ label: "New link", href: "#" })}
               renderItem={(link, _linkIndex, updateLink) => (
                 <>
-                  <TextField label="Label" value={link.label} onChange={(label) => updateLink({ ...link, label })} />
-                  <TextField label="URL" value={link.href} onChange={(href) => updateLink({ ...link, href })} />
+                  <TextField label="Text" value={link.label} onChange={(label) => updateLink({ ...link, label })} />
+                  <TextField
+                    label="Link"
+                    description="Where this goes when clicked."
+                    value={link.href}
+                    onChange={(href) => updateLink({ ...link, href })}
+                  />
                 </>
               )}
             />
@@ -77,19 +87,25 @@ export function FooterEditor({ section, onChange }: { section: Instance; onChang
         )}
       />
       <ArrayField
-        label="Social links"
+        label="Social media links (optional)"
         items={section.socialLinks ?? []}
         onChange={(socialLinks) => onChange({ ...section, socialLinks })}
         createItem={() => ({ label: "Twitter", href: "#" })}
         renderItem={(link, _index, update) => (
           <>
-            <TextField label="Label" value={link.label} onChange={(label) => update({ ...link, label })} />
-            <TextField label="URL" value={link.href} onChange={(href) => update({ ...link, href })} />
+            <TextField label="Platform name" value={link.label} onChange={(label) => update({ ...link, label })} />
+            <TextField
+              label="Link"
+              description="Your profile URL on that platform."
+              value={link.href}
+              onChange={(href) => update({ ...link, href })}
+            />
           </>
         )}
       />
       <TextField
-        label="Copyright text"
+        label="Copyright notice"
+        description='Shown at the bottom of every page, e.g. "© 2026 Acme Co. All rights reserved."'
         value={section.copyrightText}
         onChange={(copyrightText) => onChange({ ...section, copyrightText })}
       />

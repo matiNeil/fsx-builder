@@ -40,7 +40,8 @@ export function FaqEditor({ section, onChange }: { section: Instance; onChange: 
         onChange={(heading) => onChange({ ...section, heading: heading || undefined })}
       />
       <ArrayField
-        label="Questions"
+        label="Questions & answers"
+        description="Common questions your customers ask, so they don't have to contact you to find out."
         items={section.items}
         onChange={(items) => onChange({ ...section, items })}
         createItem={() => ({ question: "New question?", answer: "Answer goes here." })}

@@ -36,14 +36,25 @@ export function StatsEditor({ section, onChange }: { section: Instance; onChange
         onChange={(heading) => onChange({ ...section, heading: heading || undefined })}
       />
       <ArrayField
-        label="Stats"
+        label="Numbers"
+        description="Impressive stats that build trust, e.g. years in business or customers served."
         items={section.items}
         onChange={(items) => onChange({ ...section, items })}
         createItem={() => ({ value: "100+", label: "New stat" })}
         renderItem={(item, _index, update) => (
           <>
-            <TextField label="Value" value={item.value} onChange={(value) => update({ ...item, value })} />
-            <TextField label="Label" value={item.label} onChange={(label) => update({ ...item, label })} />
+            <TextField
+              label="Number"
+              description='The big number, e.g. "500+".'
+              value={item.value}
+              onChange={(value) => update({ ...item, value })}
+            />
+            <TextField
+              label="What it means"
+              description='e.g. "Happy customers".'
+              value={item.label}
+              onChange={(label) => update({ ...item, label })}
+            />
           </>
         )}
       />

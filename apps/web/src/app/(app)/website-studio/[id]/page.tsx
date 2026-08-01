@@ -101,6 +101,7 @@ export default function WebsiteEditorPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [newSectionType, setNewSectionType] = useState<WebsiteSectionType>("features");
   const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isOpeningPreview, setIsOpeningPreview] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [projectMessage, setProjectMessage] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -413,6 +414,27 @@ export default function WebsiteEditorPage() {
     }
   }, [projectId, persistCurrentState]);
 
+  const onPreview = useCallback(async () => {
+    if (!projectName.trim()) {
+      setProjectError("Project name cannot be empty.");
+      return;
+    }
+    setIsOpeningPreview(true);
+    try {
+      if (hasUnsavedChanges) {
+        const saved = await persistCurrentState(true);
+        if (!saved) {
+          return;
+        }
+      }
+      if (typeof window !== "undefined") {
+        window.open(`/preview/${projectId}?chrome=1`, "_blank", "noopener,noreferrer");
+      }
+    } finally {
+      setIsOpeningPreview(false);
+    }
+  }, [projectId, projectName, hasUnsavedChanges, persistCurrentState]);
+
   const onRenewHosting = useCallback(async () => {
     setIsRenewingHosting(true);
     setHostingError(null);
@@ -549,6 +571,14 @@ export default function WebsiteEditorPage() {
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             Publish Live
+          </button>
+          <button
+            type="button"
+            onClick={() => void onPreview()}
+            disabled={isOpeningPreview}
+            className="rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-800 dark:text-blue-300"
+          >
+            {isOpeningPreview ? "Opening preview..." : "Preview"}
           </button>
         </div>
         {publishedUrl ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ContactSection } from "@fsx/templates";
-import { TextAreaField, TextField } from "./field-controls";
+import { SelectField, TextAreaField, TextField } from "./field-controls";
 
 type Instance = { id: string } & ContactSection;
 
@@ -58,7 +58,7 @@ export function ContactEditor({ section, onChange }: { section: Instance; onChan
     <div className="space-y-4">
       <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
       <TextAreaField
-        label="Body (optional)"
+        label="Description (optional)"
         value={section.body ?? ""}
         onChange={(body) => onChange({ ...section, body: body || undefined })}
       />
@@ -68,44 +68,43 @@ export function ContactEditor({ section, onChange }: { section: Instance; onChan
         onChange={(address) => onChange({ ...section, address: address || undefined })}
       />
       <TextField
-        label="Phone (optional)"
+        label="Phone number (optional)"
         value={section.phone ?? ""}
         onChange={(phone) => onChange({ ...section, phone: phone || undefined })}
       />
       <TextField
-        label="Email (optional)"
+        label="Email address (optional)"
         value={section.email ?? ""}
         onChange={(email) => onChange({ ...section, email: email || undefined })}
       />
-      <label className="block space-y-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-        Form type
-        <select
-          className="block w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          value={section.variant}
-          onChange={(event) => {
-            const variant = event.target.value as ContactSection["variant"];
-            onChange({
-              ...section,
-              variant,
-              bookingFields:
-                variant === "booking"
-                  ? (section.bookingFields ?? {
-                      checkInLabel: "Check-in",
-                      checkOutLabel: "Check-out",
-                      guestsLabel: "Guests",
-                    })
-                  : undefined,
-            });
-          }}
-        >
-          <option value="form">Contact form</option>
-          <option value="booking">Booking form</option>
-        </select>
-      </label>
+      <SelectField
+        label="Form type"
+        description="A booking form collects check-in/check-out dates instead of a message."
+        value={section.variant}
+        options={[
+          { value: "form" as const, label: "Contact form" },
+          { value: "booking" as const, label: "Booking form" },
+        ]}
+        onChange={(variant) => {
+          onChange({
+            ...section,
+            variant,
+            bookingFields:
+              variant === "booking"
+                ? (section.bookingFields ?? {
+                    checkInLabel: "Check-in",
+                    checkOutLabel: "Check-out",
+                    guestsLabel: "Guests",
+                  })
+                : undefined,
+          });
+        }}
+      />
       {section.variant === "booking" ? (
         <>
           <TextField
-            label="Check-in label"
+            label="Check-in field caption"
+            description='The text shown above the check-in date picker on your site (e.g. "Check-in" or "Arrival Date").'
             value={section.bookingFields?.checkInLabel ?? ""}
             onChange={(checkInLabel) =>
               onChange({
@@ -119,7 +118,8 @@ export function ContactEditor({ section, onChange }: { section: Instance; onChan
             }
           />
           <TextField
-            label="Check-out label"
+            label="Check-out field caption"
+            description='The text shown above the check-out date picker on your site (e.g. "Check-out" or "Departure Date").'
             value={section.bookingFields?.checkOutLabel ?? ""}
             onChange={(checkOutLabel) =>
               onChange({
@@ -133,7 +133,8 @@ export function ContactEditor({ section, onChange }: { section: Instance; onChan
             }
           />
           <TextField
-            label="Guests label"
+            label="Guests field caption"
+            description='The text shown above the guest-count field on your site (e.g. "Guests" or "Party Size").'
             value={section.bookingFields?.guestsLabel ?? ""}
             onChange={(guestsLabel) =>
               onChange({

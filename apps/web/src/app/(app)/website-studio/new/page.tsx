@@ -22,6 +22,7 @@ import {
 } from "@/lib/website-project-state";
 import { CreditsIndicator } from "@/components/credits-indicator";
 import { fetchCreditCosts, type CreditCosts } from "@/lib/credits";
+import { TemplateThumbnail } from "@/components/website-studio/template-thumbnail";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000";
@@ -232,9 +233,10 @@ export default function NewWebsitePage() {
               type="button"
               onClick={() => onSelectTemplate(template.id)}
               disabled={isCreating}
-              className="rounded-xl border border-zinc-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950"
+              className="rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950"
             >
-              <p className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+              <TemplateThumbnail templateId={template.id} />
+              <p className="mt-3 inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                 {getWebsiteTemplateCategory(template)}
               </p>
               <h3 className="mt-2 text-base font-medium">{template.name}</h3>

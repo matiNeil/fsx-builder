@@ -6,21 +6,33 @@ import { PhotoGalleryPicker } from "@/components/website-studio/photo-gallery-pi
 const inputClass =
   "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
 const labelClass = "block text-xs font-medium text-zinc-500 dark:text-zinc-400";
+const descriptionClass = "mt-0.5 block text-[11px] font-normal leading-snug text-zinc-400 dark:text-zinc-600";
+
+function FieldLabel({ label, description }: { label: string; description?: string }) {
+  return (
+    <span className="block">
+      <span className={labelClass}>{label}</span>
+      {description ? <span className={descriptionClass}>{description}</span> : null}
+    </span>
+  );
+}
 
 export function TextField({
   label,
+  description,
   value,
   onChange,
   placeholder,
 }: {
   label: string;
+  description?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
 }) {
   return (
     <label className="block space-y-1">
-      <span className={labelClass}>{label}</span>
+      <FieldLabel label={label} description={description} />
       <input
         type="text"
         className={inputClass}
@@ -34,18 +46,20 @@ export function TextField({
 
 export function TextAreaField({
   label,
+  description,
   value,
   onChange,
   rows = 3,
 }: {
   label: string;
+  description?: string;
   value: string;
   onChange: (value: string) => void;
   rows?: number;
 }) {
   return (
     <label className="block space-y-1">
-      <span className={labelClass}>{label}</span>
+      <FieldLabel label={label} description={description} />
       <textarea
         className={inputClass}
         rows={rows}
@@ -58,18 +72,20 @@ export function TextAreaField({
 
 export function SelectField<T extends string>({
   label,
+  description,
   value,
   options,
   onChange,
 }: {
   label: string;
+  description?: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   return (
     <label className="block space-y-1">
-      <span className={labelClass}>{label}</span>
+      <FieldLabel label={label} description={description} />
       <select
         className={inputClass}
         value={value}
@@ -87,17 +103,19 @@ export function SelectField<T extends string>({
 
 export function ImageField({
   label,
+  description,
   value,
   onChange,
 }: {
   label: string;
+  description?: string;
   value: string | null | undefined;
   onChange: (url: string | null) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <div className="space-y-1">
-      <span className={labelClass}>{label}</span>
+      <FieldLabel label={label} description={description} />
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -128,6 +146,7 @@ export function ImageField({
 
 export function ArrayField<T>({
   label,
+  description,
   items,
   onChange,
   createItem,
@@ -135,6 +154,7 @@ export function ArrayField<T>({
   addLabel = "Add item",
 }: {
   label: string;
+  description?: string;
   items: T[];
   onChange: (items: T[]) => void;
   createItem: () => T;
@@ -143,15 +163,18 @@ export function ArrayField<T>({
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className={labelClass}>{label}</span>
-        <button
-          type="button"
-          onClick={() => onChange([...items, createItem()])}
-          className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
-          + {addLabel}
-        </button>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className={labelClass}>{label}</span>
+          <button
+            type="button"
+            onClick={() => onChange([...items, createItem()])}
+            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            + {addLabel}
+          </button>
+        </div>
+        {description ? <p className={descriptionClass}>{description}</p> : null}
       </div>
       <div className="space-y-3">
         {items.map((item, index) => (

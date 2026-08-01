@@ -38,6 +38,7 @@ export function GalleryEditor({ section, onChange }: { section: Instance; onChan
       />
       <ArrayField<GalleryImage>
         label="Images"
+        description="Photos shown in a grid. New photos start as a placeholder — click Browse to pick a real one."
         items={section.images}
         onChange={(images) => onChange({ ...section, images })}
         createItem={() => ({ url: "https://picsum.photos/seed/gallery/800/800" })}
@@ -46,6 +47,7 @@ export function GalleryEditor({ section, onChange }: { section: Instance; onChan
             <ImageField label="Image" value={item.url} onChange={(url) => update({ ...item, url: url ?? "" })} />
             <TextField
               label="Caption (optional)"
+              description="A short line shown with this photo."
               value={item.caption ?? ""}
               onChange={(caption) => update({ ...item, caption: caption || undefined })}
             />

@@ -37,19 +37,25 @@ export function FeaturesEditor({ section, onChange }: { section: Instance; onCha
     <div className="space-y-4">
       <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
       <TextAreaField
-        label="Intro (optional)"
+        label="Short intro text (optional)"
+        description="One sentence introducing this section, shown above the list."
         value={section.intro ?? ""}
         onChange={(intro) => onChange({ ...section, intro: intro || undefined })}
       />
       <ArrayField
         label="Items"
+        description="Each item is one highlight, e.g. a service or amenity you offer."
         items={section.items}
         onChange={(items) => onChange({ ...section, items })}
         createItem={() => ({ title: "New feature", body: "Describe it." })}
         renderItem={(item, _index, update) => (
           <>
             <TextField label="Title" value={item.title} onChange={(title) => update({ ...item, title })} />
-            <TextAreaField label="Body" value={item.body} onChange={(body) => update({ ...item, body })} />
+            <TextAreaField
+              label="Description"
+              value={item.body}
+              onChange={(body) => update({ ...item, body })}
+            />
           </>
         )}
       />

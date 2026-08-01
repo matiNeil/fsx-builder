@@ -50,20 +50,30 @@ export function TestimonialsEditor({ section, onChange }: { section: Instance; o
         onChange={(heading) => onChange({ ...section, heading: heading || undefined })}
       />
       <ArrayField<Testimonial>
-        label="Testimonials"
+        label="Reviews"
+        description="Real quotes from happy customers build trust with new visitors."
         items={section.items}
         onChange={(items) => onChange({ ...section, items })}
         createItem={() => ({ quote: "This was great!", author: "Happy customer" })}
         renderItem={(item, _index, update) => (
           <>
-            <TextAreaField label="Quote" value={item.quote} onChange={(quote) => update({ ...item, quote })} />
-            <TextField label="Author" value={item.author} onChange={(author) => update({ ...item, author })} />
+            <TextAreaField
+              label="What they said"
+              value={item.quote}
+              onChange={(quote) => update({ ...item, quote })}
+            />
+            <TextField label="Their name" value={item.author} onChange={(author) => update({ ...item, author })} />
             <TextField
-              label="Role (optional)"
+              label="Their title (optional)"
+              description='e.g. "Regular customer" or their job title.'
               value={item.role ?? ""}
               onChange={(role) => update({ ...item, role: role || undefined })}
             />
-            <ImageField label="Avatar" value={item.avatarUrl} onChange={(avatarUrl) => update({ ...item, avatarUrl })} />
+            <ImageField
+              label="Photo (optional)"
+              value={item.avatarUrl}
+              onChange={(avatarUrl) => update({ ...item, avatarUrl })}
+            />
           </>
         )}
       />

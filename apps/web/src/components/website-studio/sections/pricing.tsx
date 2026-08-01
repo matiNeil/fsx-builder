@@ -46,25 +46,43 @@ export function PricingEditor({ section, onChange }: { section: Instance; onChan
     <div className="space-y-4">
       <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
       <ArrayField
-        label="Tiers"
+        label="Plans"
+        description="Each plan is one pricing option customers can choose."
         items={section.tiers}
         onChange={(tiers) => onChange({ ...section, tiers })}
         createItem={() => ({ name: "New tier", price: "$0", features: [], ctaLabel: "Choose plan" })}
         renderItem={(tier, _index, update) => (
           <>
-            <TextField label="Name" value={tier.name} onChange={(name) => update({ ...tier, name })} />
-            <TextField label="Price" value={tier.price} onChange={(price) => update({ ...tier, price })} />
             <TextField
-              label="Period (optional)"
+              label="Plan name"
+              description='e.g. "Basic" or "Pro".'
+              value={tier.name}
+              onChange={(name) => update({ ...tier, name })}
+            />
+            <TextField
+              label="Price"
+              description='e.g. "$29".'
+              value={tier.price}
+              onChange={(price) => update({ ...tier, price })}
+            />
+            <TextField
+              label="Billing period (optional)"
+              description='e.g. "per month" or "per year", shown next to the price.'
               value={tier.period ?? ""}
               onChange={(period) => update({ ...tier, period: period || undefined })}
             />
             <TextAreaField
-              label="Features (one per line)"
+              label="What's included (one per line)"
+              description="Each line becomes a checkmarked feature in the list."
               value={tier.features.join("\n")}
               onChange={(value) => update({ ...tier, features: value.split("\n").filter(Boolean) })}
             />
-            <TextField label="CTA label" value={tier.ctaLabel} onChange={(ctaLabel) => update({ ...tier, ctaLabel })} />
+            <TextField
+              label="Button text"
+              description='e.g. "Choose plan" or "Sign up".'
+              value={tier.ctaLabel}
+              onChange={(ctaLabel) => update({ ...tier, ctaLabel })}
+            />
           </>
         )}
       />

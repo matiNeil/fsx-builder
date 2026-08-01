@@ -29,24 +29,31 @@ export function CtaRenderer({ section }: { section: Instance }) {
 export function CtaEditor({ section, onChange }: { section: Instance; onChange: (next: Instance) => void }) {
   return (
     <div className="space-y-4">
-      <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+      <TextField
+        label="Headline"
+        description="A short, punchy statement encouraging visitors to take action."
+        value={section.heading}
+        onChange={(heading) => onChange({ ...section, heading })}
+      />
       <TextAreaField
-        label="Body (optional)"
+        label="Description (optional)"
         value={section.body ?? ""}
         onChange={(body) => onChange({ ...section, body: body || undefined })}
       />
       <TextField
-        label="Primary CTA label"
+        label="Button text"
+        description='e.g. "Get Started" or "Book Now".'
         value={section.primaryCta.label}
         onChange={(label) => onChange({ ...section, primaryCta: { ...section.primaryCta, label } })}
       />
       <TextField
-        label="Primary CTA URL"
+        label="Button link"
+        description="Where this button sends visitors."
         value={section.primaryCta.href}
         onChange={(href) => onChange({ ...section, primaryCta: { ...section.primaryCta, href } })}
       />
       <TextField
-        label="Secondary CTA label"
+        label="Second button text (optional)"
         value={section.secondaryCta?.label ?? ""}
         onChange={(label) =>
           onChange({
@@ -57,7 +64,7 @@ export function CtaEditor({ section, onChange }: { section: Instance; onChange: 
       />
       {section.secondaryCta ? (
         <TextField
-          label="Secondary CTA URL"
+          label="Second button link"
           value={section.secondaryCta.href}
           onChange={(href) => onChange({ ...section, secondaryCta: { ...section.secondaryCta!, href } })}
         />

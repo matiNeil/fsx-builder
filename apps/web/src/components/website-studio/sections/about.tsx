@@ -34,8 +34,19 @@ export function AboutEditor({ section, onChange }: { section: Instance; onChange
   return (
     <div className="space-y-4">
       <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
-      <TextAreaField label="Body" value={section.body} onChange={(body) => onChange({ ...section, body })} rows={5} />
-      <ImageField label="Image" value={section.imageUrl} onChange={(imageUrl) => onChange({ ...section, imageUrl })} />
+      <TextAreaField
+        label="Description"
+        description="Tell visitors your story — who you are and what makes you different."
+        value={section.body}
+        onChange={(body) => onChange({ ...section, body })}
+        rows={5}
+      />
+      <ImageField
+        label="Image"
+        description="A photo shown next to this text."
+        value={section.imageUrl}
+        onChange={(imageUrl) => onChange({ ...section, imageUrl })}
+      />
     </div>
   );
 }

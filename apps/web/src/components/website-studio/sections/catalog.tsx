@@ -1,7 +1,7 @@
 "use client";
 
 import type { CatalogItem, CatalogSection } from "@fsx/templates";
-import { ArrayField, ImageField, TextAreaField, TextField } from "./field-controls";
+import { ArrayField, ImageField, SelectField, TextAreaField, TextField } from "./field-controls";
 
 type Instance = { id: string } & CatalogSection;
 
@@ -57,14 +57,31 @@ const VARIANT_OPTIONS: { value: CatalogSection["variant"]; label: string }[] = [
   { value: "packages", label: "Packages" },
 ];
 
+const META_FIELD: Record<CatalogSection["variant"], { label: string; description: string }> = {
+  products: { label: "Extra detail (optional)", description: 'e.g. "Ships in 2 days".' },
+  listings: { label: "Property details (optional)", description: 'e.g. "3 bed · 2 bath · 1,400 sqft".' },
+  rooms: { label: "Room details (optional)", description: 'e.g. "2 guests · King bed".' },
+  menu: { label: "Dietary info (optional)", description: 'e.g. "Vegetarian" or "Contains nuts".' },
+  packages: { label: "Package details (optional)", description: 'e.g. "3 sessions, 1 month".' },
+};
+
 export function CatalogEditor({ section, onChange }: { section: Instance; onChange: (next: Instance) => void }) {
+  const metaField = META_FIELD[section.variant];
   return (
     <div className="space-y-4">
       <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
       <TextAreaField
-        label="Intro (optional)"
+        label="Short intro text (optional)"
+        description="One sentence introducing this section, shown above the list."
         value={section.intro ?? ""}
         onChange={(intro) => onChange({ ...section, intro: intro || undefined })}
+      />
+      <SelectField
+        label="Type"
+        description="What kind of items you're listing — changes the fields below to match."
+        value={section.variant}
+        options={VARIANT_OPTIONS}
+        onChange={(variant) => onChange({ ...section, variant })}
       />
       <ArrayField<CatalogItem>
         label="Items"
@@ -81,16 +98,19 @@ export function CatalogEditor({ section, onChange }: { section: Instance; onChan
             />
             <TextField
               label="Price (optional)"
+              description='e.g. "$25" or "From $99/night".'
               value={item.price ?? ""}
               onChange={(price) => update({ ...item, price: price || undefined })}
             />
             <TextField
-              label="Meta (optional)"
+              label={metaField.label}
+              description={metaField.description}
               value={item.meta ?? ""}
               onChange={(meta) => update({ ...item, meta: meta || undefined })}
             />
             <TextField
-              label="CTA label (optional)"
+              label="Button text (optional)"
+              description='e.g. "Order now" or "View details".'
               value={item.ctaLabel ?? ""}
               onChange={(ctaLabel) => update({ ...item, ctaLabel: ctaLabel || undefined })}
             />
@@ -102,20 +122,6 @@ export function CatalogEditor({ section, onChange }: { section: Instance; onChan
           </>
         )}
       />
-      <label className="block space-y-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-        Variant
-        <select
-          className="block w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          value={section.variant}
-          onChange={(event) => onChange({ ...section, variant: event.target.value as CatalogSection["variant"] })}
-        >
-          {VARIANT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
     </div>
   );
 }

@@ -34,21 +34,33 @@ export function NavbarRenderer({ section }: { section: Instance }) {
 export function NavbarEditor({ section, onChange }: { section: Instance; onChange: (next: Instance) => void }) {
   return (
     <div className="space-y-4">
-      <TextField label="Brand name" value={section.brand} onChange={(brand) => onChange({ ...section, brand })} />
+      <TextField
+        label="Business name"
+        description="Shown in the top-left corner of every page."
+        value={section.brand}
+        onChange={(brand) => onChange({ ...section, brand })}
+      />
       <ArrayField
-        label="Nav links"
+        label="Menu links"
+        description="The links shown across the top of your site."
         items={section.links}
         onChange={(links) => onChange({ ...section, links })}
         createItem={() => ({ label: "New link", href: "#" })}
         renderItem={(item, _index, update) => (
           <>
-            <TextField label="Label" value={item.label} onChange={(label) => update({ ...item, label })} />
-            <TextField label="URL" value={item.href} onChange={(href) => update({ ...item, href })} />
+            <TextField label="Text" value={item.label} onChange={(label) => update({ ...item, label })} />
+            <TextField
+              label="Link"
+              description="Where this goes when clicked."
+              value={item.href}
+              onChange={(href) => update({ ...item, href })}
+            />
           </>
         )}
       />
       <TextField
-        label="CTA label (optional)"
+        label="Button text (optional)"
+        description='Shown as a highlighted button in your top menu, e.g. "Get Started".'
         value={section.cta?.label ?? ""}
         onChange={(label) =>
           onChange({ ...section, cta: label ? { label, href: section.cta?.href ?? "#" } : undefined })
@@ -56,7 +68,8 @@ export function NavbarEditor({ section, onChange }: { section: Instance; onChang
       />
       {section.cta ? (
         <TextField
-          label="CTA URL"
+          label="Button link"
+          description="Where this button sends visitors."
           value={section.cta.href}
           onChange={(href) => onChange({ ...section, cta: { ...section.cta!, href } })}
         />

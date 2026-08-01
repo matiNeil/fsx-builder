@@ -47,13 +47,22 @@ export function TeamEditor({ section, onChange }: { section: Instance; onChange:
         renderItem={(item, _index, update) => (
           <>
             <TextField label="Name" value={item.name} onChange={(name) => update({ ...item, name })} />
-            <TextField label="Role" value={item.role} onChange={(role) => update({ ...item, role })} />
+            <TextField
+              label="Job title"
+              description='e.g. "Founder" or "Head Chef".'
+              value={item.role}
+              onChange={(role) => update({ ...item, role })}
+            />
             <TextAreaField
-              label="Bio (optional)"
+              label="Short bio (optional)"
               value={item.bio ?? ""}
               onChange={(bio) => update({ ...item, bio: bio || undefined })}
             />
-            <ImageField label="Photo" value={item.photoUrl} onChange={(photoUrl) => update({ ...item, photoUrl })} />
+            <ImageField
+              label="Photo"
+              value={item.photoUrl}
+              onChange={(photoUrl) => update({ ...item, photoUrl })}
+            />
           </>
         )}
       />

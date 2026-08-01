@@ -79,30 +79,45 @@ export function HeroEditor({ section, onChange }: { section: Instance; onChange:
   return (
     <div className="space-y-4">
       <TextField
-        label="Eyebrow (optional)"
+        label="Tag line above your headline (optional)"
+        description='A short line above your main heading, e.g. "Now Open" or "Family Owned Since 1998".'
         value={section.eyebrow ?? ""}
         onChange={(eyebrow) => onChange({ ...section, eyebrow: eyebrow || undefined })}
       />
-      <TextField label="Heading" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+      <TextField
+        label="Headline"
+        description="The big, bold statement visitors see first."
+        value={section.heading}
+        onChange={(heading) => onChange({ ...section, heading })}
+      />
       <TextField
         label="Subheading (optional)"
+        description="A supporting line under your headline."
         value={section.subheading ?? ""}
         onChange={(subheading) => onChange({ ...section, subheading: subheading || undefined })}
       />
       <TextAreaField
-        label="Body"
+        label="Description"
+        description="A sentence or two explaining what you offer."
         value={section.body ?? ""}
         onChange={(body) => onChange({ ...section, body: body || undefined })}
       />
       <SelectField
         label="Layout"
+        description="How your headline and image are arranged."
         value={section.layout}
         options={LAYOUT_OPTIONS}
         onChange={(layout) => onChange({ ...section, layout })}
       />
-      <ImageField label="Image" value={section.imageUrl} onChange={(imageUrl) => onChange({ ...section, imageUrl })} />
+      <ImageField
+        label="Image"
+        description="A photo shown alongside (or behind) your headline."
+        value={section.imageUrl}
+        onChange={(imageUrl) => onChange({ ...section, imageUrl })}
+      />
       <TextField
-        label="Primary CTA label"
+        label="Button text"
+        description='The words on your main button, e.g. "Book Now" or "Get a Quote".'
         value={section.primaryCta?.label ?? ""}
         onChange={(label) =>
           onChange({ ...section, primaryCta: label ? { label, href: section.primaryCta?.href ?? "#" } : undefined })
@@ -110,13 +125,15 @@ export function HeroEditor({ section, onChange }: { section: Instance; onChange:
       />
       {section.primaryCta ? (
         <TextField
-          label="Primary CTA URL"
+          label="Button link"
+          description="Where this button sends visitors — a web address, or a page on your site."
           value={section.primaryCta.href}
           onChange={(href) => onChange({ ...section, primaryCta: { ...section.primaryCta!, href } })}
         />
       ) : null}
       <TextField
-        label="Secondary CTA label"
+        label="Second button text (optional)"
+        description='A lower-priority action, e.g. "Learn more".'
         value={section.secondaryCta?.label ?? ""}
         onChange={(label) =>
           onChange({
@@ -127,7 +144,8 @@ export function HeroEditor({ section, onChange }: { section: Instance; onChange:
       />
       {section.secondaryCta ? (
         <TextField
-          label="Secondary CTA URL"
+          label="Second button link"
+          description="Where this button sends visitors."
           value={section.secondaryCta.href}
           onChange={(href) => onChange({ ...section, secondaryCta: { ...section.secondaryCta!, href } })}
         />
