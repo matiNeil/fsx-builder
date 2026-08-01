@@ -44,8 +44,8 @@ const SECTIONS = [
     ),
   },
   {
-    id: "website-builder",
-    title: "Website Builder",
+    id: "website-studio",
+    title: "Website Studio",
     body: (
       <>
         <p>
@@ -67,7 +67,7 @@ const SECTIONS = [
         <p>
           <strong>Publish</strong> makes your site live at a shareable{" "}
           <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">
-            fsxbuilder.com/published/&lt;project-id&gt;
+            fsxstudio.com/published/&lt;project-id&gt;
           </code>{" "}
           URL that anyone can view without signing in.
         </p>
@@ -145,7 +145,7 @@ export default function DocsPage() {
           <div className="space-y-2">
             <h1 className="text-4xl font-semibold tracking-tight">Documentation</h1>
             <p className="text-zinc-600 dark:text-zinc-400">
-              Everything you need to build with the Website Builder, Poster Generator, and Image
+              Everything you need to build with the Website Studio, Poster Generator, and Image
               Creator.
             </p>
           </div>

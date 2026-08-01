@@ -14,7 +14,7 @@ type WebsiteProject = {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000";
 
-export default function WebsiteBuilderPage() {
+export default function WebsiteStudioPage() {
   const { data: session } = useSession();
   const apiToken = session?.apiToken;
   const authHeaders = useMemo<Record<string, string>>(() => {
@@ -65,13 +65,13 @@ export default function WebsiteBuilderPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 px-6 py-10 sm:px-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Website Builder</h1>
+          <h1 className="text-3xl font-semibold">Website Studio</h1>
           <p className="mt-1 max-w-xl text-zinc-600 dark:text-zinc-400">
             Pick a template, and we&apos;ll set up a full website for you to customize.
           </p>
         </div>
         <Link
-          href="/website-builder/new"
+          href="/website-studio/new"
           className="btn-gradient rounded-lg px-5 py-2.5 text-sm font-medium text-white"
         >
           + New Website
@@ -88,7 +88,7 @@ export default function WebsiteBuilderPage() {
             You haven&apos;t created a website yet.
           </p>
           <Link
-            href="/website-builder/new"
+            href="/website-studio/new"
             className="mt-4 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
           >
             Create your first website
@@ -108,7 +108,7 @@ export default function WebsiteBuilderPage() {
                 </p>
               ) : null}
               <Link
-                href={`/website-builder/${project.id}`}
+                href={`/website-studio/${project.id}`}
                 className="mt-3 inline-block rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium dark:border-zinc-700"
               >
                 Open

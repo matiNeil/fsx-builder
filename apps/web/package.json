@@ -11,6 +11,7 @@
     "test:smoke": "tsx --test src/lib/*.smoke.test.ts"
   },
   "dependencies": {
+    "@fsx/templates": "*",
     "konva": "^9.3.14",
     "next": "16.2.10",
     "next-auth": "5.0.0-beta.32",

@@ -10,7 +10,7 @@ export default function TermsPage() {
           Placeholder page — replace this with your real terms of service before launch.
         </p>
         <p className="text-zinc-600 dark:text-zinc-400">
-          This page is a placeholder. FSX Builder does not yet have published terms of service.
+          This page is a placeholder. FSX Studio does not yet have published terms of service.
         </p>
       </main>
     </>

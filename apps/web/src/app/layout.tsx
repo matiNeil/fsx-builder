@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { SessionProvider } from "@/components/session-provider";
+import { websiteFontVariables } from "./website-fonts";
 
 export const metadata: Metadata = {
-  title: "FSX Builder",
-  description: "Website builder, poster generator, and image creator",
+  title: "FSX Studio",
+  description: "Website studio, poster generator, and image creator",
 };
 
 export default function RootLayout({
@@ -25,7 +26,7 @@ export default function RootLayout({
   `;
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`h-full antialiased ${websiteFontVariables}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

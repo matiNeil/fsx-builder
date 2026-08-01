@@ -17,6 +17,7 @@ model User {
   projects           Project[]
   subscription       Subscription?
   creditTransactions CreditTransaction[]
+  payments           Payment[]
 }
 
 model Plan {
@@ -31,6 +32,7 @@ model Plan {
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   subscriptions       Subscription[]
+  payments            Payment[]
 }
 
 model Subscription {
@@ -75,6 +77,42 @@ model CreditCost {
   updatedAt DateTime @updatedAt
 }
 
+model CreditPack {
+  id         String    @id @default(cuid())
+  key        String    @unique
+  name       String
+  credits    Int
+  priceCents Int
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  payments   Payment[]
+}
+
+model Payment {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind            String      @default("plan")
+  planId          String?
+  plan            Plan?       @relation(fields: [planId], references: [id])
+  creditPackId    String?
+  creditPack      CreditPack? @relation(fields: [creditPackId], references: [id])
+  projectId       String?
+  project         Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  reference       String      @unique
+  paynowReference String?
+  pollUrl         String
+  amountCents     Int
+  status          String      @default("Created")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([planId])
+  @@index([creditPackId])
+  @@index([projectId])
+}
+
 model Project {
   id                 String              @id @default(cuid())
   userId             String
@@ -82,12 +120,21 @@ model Project {
   name               String
   type               String
   data               String              @default("{}")
+  hostingStatus      String              @default("active")
+  hostingExpiresAt   DateTime?
+  domainType         String?
+  domain             String?             @unique
+  domainStatus       String?
+  domainError        String?
+  domainVerifiedAt   DateTime?
   assets             Asset[]
   creditTransactions CreditTransaction[]
+  payments           Payment[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
   @@index([userId])
+  @@index([hostingStatus, hostingExpiresAt])
 }
 
 model Asset {

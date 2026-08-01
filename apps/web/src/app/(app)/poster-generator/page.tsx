@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { getTemplatesByType } from "@/lib/templates";
+import { getTemplatesByType } from "@fsx/templates";
 import {
   createPosterProjectState,
   createPosterStateFromTemplate,
@@ -34,7 +34,29 @@ const isTypingInInput = (eventTarget: EventTarget | null) => {
   return tagName === "INPUT" || tagName === "TEXTAREA" || target.isContentEditable;
 };
 
-const exportPosterAsPng = (
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load poster background image."));
+    image.src = src;
+  });
+
+const drawCoverImage = (
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number
+) => {
+  const scale = Math.max(width / image.width, height / image.height);
+  const drawWidth = image.width * scale;
+  const drawHeight = image.height * scale;
+  const dx = (width - drawWidth) / 2;
+  const dy = (height - drawHeight) / 2;
+  context.drawImage(image, dx, dy, drawWidth, drawHeight);
+};
+
+const exportPosterAsPng = async (
   projectState: PosterProjectState,
   width: number,
   height: number,
@@ -50,6 +72,18 @@ const exportPosterAsPng = (
 
   context.fillStyle = projectState.backgroundColor;
   context.fillRect(0, 0, width, height);
+
+  if (projectState.backgroundImageUrl) {
+    try {
+      const image = await loadImage(projectState.backgroundImageUrl);
+      drawCoverImage(context, image, width, height);
+      context.fillStyle = "rgba(0, 0, 0, 0.35)";
+      context.fillRect(0, 0, width, height);
+    } catch {
+      // fall back to the flat background color if the image fails to load
+    }
+  }
+
   context.fillStyle = projectState.textColor;
   context.textAlign = "left";
 
@@ -120,6 +154,9 @@ export default function PosterGeneratorPage() {
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [aiImageError, setAiImageError] = useState<string | null>(null);
 
   const selectedTemplate = posterTemplates.find(
     (template) => template.id === posterState.selectedTemplateId
@@ -202,6 +239,64 @@ export default function PosterGeneratorPage() {
       ...current,
       [key]: value,
     }));
+  };
+
+  const onGenerateAiImage = async () => {
+    if (!aiPrompt.trim()) {
+      setAiImageError("Enter a prompt first.");
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    setAiImageError(null);
+    try {
+      const isLandscape = selectedTemplate ? selectedTemplate.width > selectedTemplate.height : false;
+      const size = isLandscape ? "1536x1024" : "1024x1536";
+      const response = await fetch(`${API_BASE_URL}/ai/generate-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt.trim(),
+          size,
+          projectId: activeProjectId ?? undefined,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        imageDataUrl?: string;
+        message?: string;
+        creditsRemaining?: number;
+        required?: number;
+        available?: number;
+      };
+      if (!response.ok || !payload.imageDataUrl) {
+        if (response.status === 402 && typeof payload.required === "number") {
+          if (typeof payload.available === "number") {
+            setCreditsRemaining(payload.available);
+          }
+          throw new Error(
+            `Not enough credits to generate an image (need ${payload.required}, have ${payload.available}).`
+          );
+        }
+        throw new Error(payload.message ?? "Image generation failed.");
+      }
+      if (typeof payload.creditsRemaining === "number") {
+        setCreditsRemaining(payload.creditsRemaining);
+      }
+      onChangePosterState("backgroundImageUrl", payload.imageDataUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Image generation failed.";
+      setAiImageError(message);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const onRemoveAiImage = () => {
+    onChangePosterState("backgroundImageUrl", null);
   };
 
   const onSelectTemplate = (templateId: string) => {
@@ -598,6 +693,46 @@ export default function PosterGeneratorPage() {
             </div>
           </div>
           <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            <h3 className="text-sm font-medium">AI background image</h3>
+            <CreditsIndicator
+              creditsRemaining={creditsRemaining}
+              requiredForAction={creditCosts["image.generate"]}
+              actionLabel="generate an AI background"
+            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(event) => setAiPrompt(event.target.value)}
+                placeholder="Describe the poster background you want..."
+                className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+              />
+              <button
+                type="button"
+                onClick={() => void onGenerateAiImage()}
+                disabled={
+                  isGeneratingImage ||
+                  (creditsRemaining !== null && creditsRemaining < (creditCosts["image.generate"] ?? 0))
+                }
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isGeneratingImage ? "Generating..." : "Generate"}
+              </button>
+            </div>
+            {posterState.backgroundImageUrl ? (
+              <button
+                type="button"
+                onClick={onRemoveAiImage}
+                className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs dark:border-zinc-700"
+              >
+                Remove background image
+              </button>
+            ) : null}
+            {aiImageError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{aiImageError}</p>
+            ) : null}
+          </div>
+          <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium">Detail lines</h3>
               <button
@@ -634,7 +769,7 @@ export default function PosterGeneratorPage() {
             <button
               type="button"
               onClick={() =>
-                exportPosterAsPng(
+                void exportPosterAsPng(
                   posterState,
                   selectedTemplate?.width ?? 1080,
                   selectedTemplate?.height ?? 1350,
@@ -670,15 +805,23 @@ export default function PosterGeneratorPage() {
           </div>
           <div className="overflow-hidden rounded-lg border border-zinc-300 bg-zinc-100 p-3 dark:border-zinc-700 dark:bg-zinc-900">
             <div
-              className="mx-auto overflow-hidden rounded-md"
+              className="relative mx-auto overflow-hidden rounded-md"
               style={{
                 width: previewWidth,
                 height: previewHeight,
-                background: posterState.backgroundColor,
+                backgroundColor: posterState.backgroundColor,
+                backgroundImage: posterState.backgroundImageUrl
+                  ? `url(${posterState.backgroundImageUrl})`
+                  : undefined,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
                 color: posterState.textColor,
               }}
             >
-              <div className="flex h-full flex-col px-8 py-10">
+              {posterState.backgroundImageUrl ? (
+                <div className="absolute inset-0 bg-black/35" />
+              ) : null}
+              <div className="relative flex h-full flex-col px-8 py-10">
                 <h3 className="text-4xl font-extrabold">{posterState.title}</h3>
                 <p className="mt-5 text-lg opacity-90">{posterState.subtitle}</p>
                 <div className="mt-8 space-y-2 text-base">

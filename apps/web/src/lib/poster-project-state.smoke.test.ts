@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getTemplatesByType } from "@/lib/templates";
+import { getTemplatesByType } from "@fsx/templates";
 import {
   createPosterProjectState,
   createPosterStateFromTemplate,

@@ -4,7 +4,7 @@ const COLUMNS: { heading: string; links: { label: string; href: string; external
   {
     heading: "Products",
     links: [
-      { label: "Website Builder", href: "/website-builder" },
+      { label: "Website Studio", href: "/website-studio" },
       { label: "Poster Generator", href: "/poster-generator" },
       { label: "Image Creator", href: "/image-creator" },
       { label: "All Features", href: "/#features" },

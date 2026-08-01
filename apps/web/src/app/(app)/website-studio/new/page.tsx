@@ -4,43 +4,27 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
+  DEFAULT_WEBSITE_THEME_ID,
   getTemplatesByType,
   getWebsiteTemplateCategory,
+  getWebsiteTemplateDefinition,
   listWebsiteTemplateCategories,
   searchWebsiteTemplates,
+  websiteTemplateDefinitions,
+  type WebsiteSectionContent,
   type WebsiteTemplateCategory,
-} from "@/lib/templates";
+} from "@fsx/templates";
 import {
   createPersistedWebsiteProjectState,
   createTemplateBackedPages,
+  instantiateTemplatePages,
   type WebsitePage,
 } from "@/lib/website-project-state";
-import { flagshipTemplateIds } from "@/lib/website-template-content";
 import { CreditsIndicator } from "@/components/credits-indicator";
 import { fetchCreditCosts, type CreditCosts } from "@/lib/credits";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000";
-
-const CATEGORY_KEYWORDS: { category: string; templateId: string; keywords: string[] }[] = [
-  { category: "Food", templateId: "website-restaurant", keywords: ["restaurant", "food", "cafe", "menu", "coffee", "bakery"] },
-  { category: "Store", templateId: "website-ecommerce-home", keywords: ["shop", "store", "sell", "product", "ecommerce", "retail"] },
-  { category: "Real Estate", templateId: "website-realty-listings", keywords: ["real estate", "property", "realtor", "homes", "listing"] },
-  { category: "Nonprofit", templateId: "website-nonprofit", keywords: ["nonprofit", "charity", "donate", "mission", "fundraiser"] },
-  { category: "Technology", templateId: "website-saas-landing", keywords: ["app", "software", "saas", "startup", "platform", "tech"] },
-  { category: "Portfolio", templateId: "website-portfolio-minimal", keywords: ["portfolio", "designer", "freelance", "photographer", "artist"] },
-  { category: "Media", templateId: "website-personal-blog", keywords: ["blog", "write", "writer", "content", "journal"] },
-];
-
-const guessTemplateId = (description: string): string => {
-  const normalized = description.toLowerCase();
-  for (const entry of CATEGORY_KEYWORDS) {
-    if (entry.keywords.some((keyword) => normalized.includes(keyword))) {
-      return entry.templateId;
-    }
-  }
-  return "website-corporate";
-};
 
 export default function NewWebsitePage() {
   const router = useRouter();
@@ -56,11 +40,11 @@ export default function NewWebsitePage() {
 
   const websiteTemplates = useMemo(() => getTemplatesByType("website"), []);
   const flagshipTemplates = useMemo(
-    () => websiteTemplates.filter((template) => flagshipTemplateIds.includes(template.id)),
+    () => websiteTemplates.filter((template) => template.id in websiteTemplateDefinitions),
     [websiteTemplates]
   );
   const otherTemplates = useMemo(
-    () => websiteTemplates.filter((template) => !flagshipTemplateIds.includes(template.id)),
+    () => websiteTemplates.filter((template) => !(template.id in websiteTemplateDefinitions)),
     [websiteTemplates]
   );
 
@@ -91,42 +75,24 @@ export default function NewWebsitePage() {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const generateCopy = async (context: string, kind: "heading" | "body") => {
-    const response = await fetch(`${API_BASE_URL}/ai/generate-copy`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ context, kind }),
-    });
-    const payload = (await response.json()) as {
-      text?: string;
-      creditsRemaining?: number;
-      message?: string;
-      required?: number;
-      available?: number;
-    };
-    if (!response.ok || !payload.text) {
-      if (response.status === 402 && typeof payload.required === "number") {
-        if (typeof payload.available === "number") {
-          setCreditsRemaining(payload.available);
-        }
-        throw new Error(
-          `Not enough credits to generate with AI (need ${payload.required}, have ${payload.available}).`
-        );
-      }
-      throw new Error(payload.message ?? "AI generation failed.");
-    }
-    if (typeof payload.creditsRemaining === "number") {
-      setCreditsRemaining(payload.creditsRemaining);
-    }
-    return payload.text;
-  };
-
-  const createProject = async (pages: WebsitePage[], name: string, templateId: string | null) => {
+  const createProject = async (
+    pages: WebsitePage[],
+    name: string,
+    templateId: string | null,
+    themeId?: string
+  ) => {
     setIsCreating(true);
     setCreateError(null);
     try {
+      const defaultThemeId =
+        themeId ??
+        (templateId
+          ? (getWebsiteTemplateDefinition(templateId)?.defaultThemeId ?? DEFAULT_WEBSITE_THEME_ID)
+          : DEFAULT_WEBSITE_THEME_ID);
       const payloadData = createPersistedWebsiteProjectState({
+        schemaVersion: 2,
         selectedTemplateId: templateId,
+        theme: { presetId: defaultThemeId },
         searchQuery: "",
         selectedCategory: "All",
         pages,
@@ -150,7 +116,7 @@ export default function NewWebsitePage() {
         const message = !("id" in payload) && payload.message ? payload.message : "Failed to create website.";
         throw new Error(message);
       }
-      router.push(`/website-builder/${payload.id}`);
+      router.push(`/website-studio/${payload.id}`);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create website.");
       setIsCreating(false);
@@ -177,23 +143,38 @@ export default function NewWebsitePage() {
     setIsGeneratingAssist(true);
     setAssistError(null);
     try {
-      const templateId = guessTemplateId(description);
-      const pages = createTemplateBackedPages(templateId, websiteTemplates);
-      const [heading, body] = await Promise.all([
-        generateCopy(description, "heading"),
-        generateCopy(description, "body"),
-      ]);
-      const customizedPages = pages.map((page, pageIndex) =>
-        pageIndex === 0
-          ? {
-              ...page,
-              sections: page.sections.map((section, sectionIndex) =>
-                sectionIndex === 0 ? { ...section, heading, body } : section
-              ),
-            }
-          : page
-      );
-      await createProject(customizedPages, description.slice(0, 60), templateId);
+      const response = await fetch(`${API_BASE_URL}/ai/generate-site`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ description }),
+      });
+      const payload = (await response.json()) as
+        | {
+            templateId: string;
+            themeId: string;
+            pages: { title: string; slug: string; sections: WebsiteSectionContent[] }[];
+            creditsRemaining?: number;
+          }
+        | { error?: string; message?: string; required?: number; available?: number };
+
+      if (!response.ok || !("templateId" in payload)) {
+        if (response.status === 402 && "required" in payload) {
+          if (typeof payload.available === "number") {
+            setCreditsRemaining(payload.available);
+          }
+          throw new Error(
+            `Not enough credits to generate with AI (need ${payload.required}, have ${payload.available}).`
+          );
+        }
+        const message = !("templateId" in payload) && payload.message ? payload.message : "AI generation failed.";
+        throw new Error(message);
+      }
+      if (typeof payload.creditsRemaining === "number") {
+        setCreditsRemaining(payload.creditsRemaining);
+      }
+
+      const pages = instantiateTemplatePages(payload.pages, payload.templateId);
+      await createProject(pages, description.slice(0, 60), payload.templateId, payload.themeId);
     } catch (error) {
       setAssistError(error instanceof Error ? error.message : "AI generation failed.");
     } finally {
@@ -225,7 +206,7 @@ export default function NewWebsitePage() {
         <CreditsIndicator
           creditsRemaining={creditsRemaining}
           requiredForAction={
-            (creditCosts["website.ai-copy"] ?? 0) * 2 + (creditCosts["website.create"] ?? 0)
+            (creditCosts["website.ai-generate-site"] ?? 0) + (creditCosts["website.create"] ?? 0)
           }
           actionLabel="generate with AI"
         />

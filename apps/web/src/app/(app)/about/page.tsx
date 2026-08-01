@@ -20,9 +20,9 @@ export default function AboutPage() {
         </div>
 
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white/60 p-6 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/50">
-          <h2 className="text-xl font-semibold">FSX Builder</h2>
+          <h2 className="text-xl font-semibold">FSX Studio</h2>
           <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            FSX Builder is our flagship product — one workspace for building websites, posters,
+            FSX Studio is our flagship product — one workspace for building websites, posters,
             and AI-generated images, without needing design or code experience. Pick a template,
             let AI help with the copy, and publish in minutes.
           </p>

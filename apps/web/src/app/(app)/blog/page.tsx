@@ -2,14 +2,14 @@ import { SiteNav } from "@/components/marketing/site-nav";
 
 const POSTS = [
   {
-    title: "Introducing the redesigned Website Builder",
+    title: "Introducing the redesigned Website Studio",
     date: "July 27, 2026",
     excerpt:
       "A guided flow, real starter content, AI-assisted copy, and a built-in photo gallery — here's what changed and why.",
     body: (
       <>
         <p>
-          The Website Builder used to put everything on one page: your saved projects, a long
+          The Website Studio used to put everything on one page: your saved projects, a long
           scrolling gallery of templates, and the full editor, all at once. It worked, but it
           wasn&apos;t easy for a first-time visitor to know where to start.
         </p>
@@ -61,7 +61,7 @@ const POSTS = [
     ),
   },
   {
-    title: "Why we built FSX Builder",
+    title: "Why we built FSX Studio",
     date: "July 10, 2026",
     excerpt:
       "Most creative tools are either too simple to be useful or too complex to actually use. We wanted something in between.",
@@ -74,7 +74,7 @@ const POSTS = [
           get out of the way.
         </p>
         <p>
-          That&apos;s the idea behind FSX Builder: one workspace for websites, posters, and
+          That&apos;s the idea behind FSX Studio: one workspace for websites, posters, and
           images, where AI handles the blank-page problem and you handle the decisions that
           actually matter.
         </p>

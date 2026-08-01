@@ -12,8 +12,8 @@ import { Reveal } from "@/components/marketing/reveal";
 
 const tools = [
   {
-    href: "/website-builder",
-    title: "Website Builder",
+    href: "/website-studio",
+    title: "Website Studio",
     description: "Responsive websites, built visually and published live in seconds.",
     gradient: "from-indigo-500 to-blue-500",
     glyphPath: "M6 10h36v28H6zM6 17h36M12 13h.01M17 13h.01M22 13h.01",

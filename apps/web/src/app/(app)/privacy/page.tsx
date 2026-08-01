@@ -10,7 +10,7 @@ export default function PrivacyPage() {
           Placeholder page — replace this with your real privacy policy before launch.
         </p>
         <p className="text-zinc-600 dark:text-zinc-400">
-          This page is a placeholder. FSX Builder does not yet have a published privacy policy.
+          This page is a placeholder. FSX Studio does not yet have a published privacy policy.
         </p>
       </main>
     </>

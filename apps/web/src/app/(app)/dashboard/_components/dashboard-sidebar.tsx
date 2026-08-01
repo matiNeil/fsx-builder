@@ -4,7 +4,7 @@ import { Logo } from "@/components/brand/logo";
 const NAV_ITEMS: { label: string; href?: string; active?: boolean }[] = [
   { label: "Dashboard", href: "/dashboard", active: true },
   { label: "Projects", href: "/dashboard#recent-projects" },
-  { label: "Templates", href: "/website-builder/new" },
+  { label: "Templates", href: "/website-studio/new" },
   { label: "AI Assistant" },
   { label: "Domains" },
   { label: "Billing", href: "/account" },

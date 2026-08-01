@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadWebsiteProjectState } from "@/lib/website-project-state";
-import { getTemplatesByType } from "@/lib/templates";
+import { getTemplatesByType } from "@fsx/templates";
+import { WebsiteThemeProvider } from "@/components/website-studio/theme-provider";
+import { SectionRenderer } from "@/components/website-studio/sections/registry";
+import { HostingSuspended } from "@/components/hosting-suspended";
 
 type Params = {
   projectId: string;
@@ -32,10 +35,15 @@ export default async function PublishedWebsitePage({
     name: string;
     type: string;
     data?: string;
+    isHostingActive: boolean;
   };
 
   if (payload.type !== "website") {
     notFound();
+  }
+
+  if (!payload.isHostingActive) {
+    return <HostingSuspended siteName={payload.name} />;
   }
 
   const templates = getTemplatesByType("website");
@@ -54,78 +62,44 @@ export default async function PublishedWebsitePage({
     notFound();
   }
 
-  const responsive = activePage.responsive.desktop;
-
   return (
     <>
-      <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:px-10">
-        <header className="mb-8 space-y-3 border-b border-zinc-200 pb-5 dark:border-zinc-800">
-          <h1 className="text-3xl font-semibold">{payload.name}</h1>
-          <nav className="flex flex-wrap gap-2">
-            {state.pages.map((page) => {
-              const slugPath = slugToPath(page.slug);
-              const href = slugPath
-                ? `/published/${projectId}/${slugPath}`
-                : `/published/${projectId}`;
-              const isActive = page.id === activePage.id;
-              return (
-                <Link
-                  key={page.id}
-                  href={href}
-                  className={`rounded-full border px-3 py-1.5 text-sm ${
-                    isActive
-                      ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                      : "border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
-                  }`}
-                >
-                  {page.title}
-                </Link>
-              );
-            })}
-          </nav>
-        </header>
-
-        <section
-          className="mx-auto"
-          style={{
-            maxWidth: `${responsive.contentWidth}px`,
-            fontSize: `${responsive.fontScale}rem`,
-          }}
-        >
-          <div
-            className="grid"
-            style={{
-              gap: `${responsive.sectionGap}px`,
-              gridTemplateColumns: `repeat(${Math.max(1, responsive.columns)}, minmax(0, 1fr))`,
-            }}
-          >
-            {activePage.sections.map((section) => (
-              <article
-                key={section.id}
-                className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+      {state.pages.length > 1 ? (
+        <nav className="flex flex-wrap gap-2 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+          {state.pages.map((page) => {
+            const slugPath = slugToPath(page.slug);
+            const href = slugPath ? `/published/${projectId}/${slugPath}` : `/published/${projectId}`;
+            const isActive = page.id === activePage.id;
+            return (
+              <Link
+                key={page.id}
+                href={href}
+                className={`rounded-full border px-3 py-1.5 text-sm ${
+                  isActive
+                    ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                    : "border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+                }`}
               >
-                {section.imageUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={section.imageUrl} alt="" className="h-56 w-full object-cover" />
-                ) : null}
-                <div className="p-5">
-                  <h2 className="text-xl font-semibold">{section.heading}</h2>
-                  <p className="mt-2 whitespace-pre-wrap text-zinc-600 dark:text-zinc-400">
-                    {section.body}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      </main>
+                {page.title}
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+
+      <WebsiteThemeProvider presetId={state.theme.presetId} overrides={state.theme.overrides}>
+        {activePage.sections.map((section) => (
+          <SectionRenderer key={section.id} section={section} />
+        ))}
+      </WebsiteThemeProvider>
+
       <a
         href="/"
         target="_blank"
         rel="noreferrer"
         className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/90 px-3 py-1.5 text-xs text-zinc-600 shadow-lg backdrop-blur-sm transition hover:-translate-y-0.5 hover:shadow-xl dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-300"
       >
-        Powered by <span className="font-semibold text-zinc-900 dark:text-white">FSX Builder</span>
+        Powered by <span className="font-semibold text-zinc-900 dark:text-white">FSX Studio</span>
       </a>
     </>
   );

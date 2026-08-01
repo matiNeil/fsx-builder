@@ -1,4 +1,4 @@
-import { type TemplateDefinition } from "@/lib/templates";
+import { type TemplateDefinition } from "@fsx/templates";
 
 export type PosterContentBlock = {
   id: string;
@@ -12,6 +12,7 @@ export type PosterProjectState = {
   cta: string;
   backgroundColor: string;
   textColor: string;
+  backgroundImageUrl: string | null;
   blocks: PosterContentBlock[];
 };
 
@@ -22,6 +23,7 @@ const createDefaultPosterState = (template?: TemplateDefinition): PosterProjectS
   cta: "Register now",
   backgroundColor: "#111827",
   textColor: "#f8fafc",
+  backgroundImageUrl: null,
   blocks: [
     { id: "line-1", text: "Date: 25 Aug 2026" },
     { id: "line-2", text: "Location: Main Hall" },
@@ -92,6 +94,8 @@ export const loadPosterProjectState = (
         ? objectData.backgroundColor
         : fallback.backgroundColor,
     textColor: typeof objectData.textColor === "string" ? objectData.textColor : fallback.textColor,
+    backgroundImageUrl:
+      typeof objectData.backgroundImageUrl === "string" ? objectData.backgroundImageUrl : null,
     blocks: sanitizeBlocks(objectData.blocks),
   };
 };
@@ -103,6 +107,7 @@ export const createPosterProjectState = (state: PosterProjectState) => ({
   cta: state.cta,
   backgroundColor: state.backgroundColor,
   textColor: state.textColor,
+  backgroundImageUrl: state.backgroundImageUrl,
   blocks: state.blocks,
 });
 

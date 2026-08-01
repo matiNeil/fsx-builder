@@ -10,7 +10,7 @@ export default function AcceptableUsePage() {
           Placeholder page — replace this with your real acceptable use policy before launch.
         </p>
         <p className="text-zinc-600 dark:text-zinc-400">
-          This page is a placeholder. FSX Builder does not yet have a published acceptable use
+          This page is a placeholder. FSX Studio does not yet have a published acceptable use
           policy.
         </p>
       </main>

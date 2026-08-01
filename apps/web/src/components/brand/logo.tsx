@@ -19,7 +19,7 @@ export function Logo({ size = "sm" }: { size?: keyof typeof SIZES }) {
         priority
       />
       <span className={`${text} font-extrabold tracking-tight text-zinc-900 dark:text-white`}>
-        Builder
+        Studio
       </span>
     </span>
   );

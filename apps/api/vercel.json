@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/cron/suspend-expired-hosting",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ const TESTIMONIALS = [
   {
     initials: "JD",
     color: "from-indigo-400 to-blue-400",
-    quote: "I built my business website in minutes. FSX Builder is a game-changer!",
+    quote: "I built my business website in minutes. FSX Studio is a game-changer!",
     name: "John D.",
     role: "Entrepreneur",
   },

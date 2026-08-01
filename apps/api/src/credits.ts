@@ -20,6 +20,17 @@ export const addMonths = (date: Date, months: number) => {
   return next;
 };
 
+/**
+ * Extends a hosting expiry by one month. If still active, extends from the
+ * current expiry (renewal stacks on top of remaining time); if lapsed or
+ * unset, extends from now (paying after suspension restores for a full month
+ * starting today, rather than back-dating from the missed expiry).
+ */
+export const extendHostingExpiry = (currentExpiresAt: Date | null, from: Date = new Date()): Date => {
+  const base = currentExpiresAt && currentExpiresAt > from ? currentExpiresAt : from;
+  return addMonths(base, 1);
+};
+
 export const getOrRefreshBalance = async (db: DbClient, userId: string) => {
   const subscription = await db.subscription.findUnique({
     where: { userId },

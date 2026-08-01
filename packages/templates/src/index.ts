@@ -11,7 +11,11 @@ export type WebsiteTemplateCategory =
   | "Real Estate"
   | "Nonprofit"
   | "Technology"
-  | "Landing";
+  | "Landing"
+  | "Construction"
+  | "Hotel"
+  | "Law Firm"
+  | "Travel Agency";
 
 export interface TemplateDefinition {
   id: string;
@@ -20,7 +24,13 @@ export interface TemplateDefinition {
   width: number;
   height: number;
   description: string;
+  /** Explicit category for templates with a rich WebsiteTemplateDefinition. Falls back to id substring inference when absent. */
+  category?: WebsiteTemplateCategory;
 }
+
+export * from "./sections.js";
+export * from "./theme.js";
+export * from "./website-template-definitions.js";
 
 export const templatePresets: TemplateDefinition[] = [
   {
@@ -54,6 +64,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1280,
     height: 2000,
     description: "Minimal personal portfolio for designers and developers.",
+    category: "Portfolio",
   },
   {
     id: "website-freelancer-profile",
@@ -70,6 +81,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1440,
     height: 2600,
     description: "Product grid, featured collections, and promotional banners.",
+    category: "Store",
   },
   {
     id: "website-fashion-store",
@@ -94,6 +106,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1366,
     height: 2100,
     description: "Menu highlights, reservations, and chef story layout.",
+    category: "Food",
   },
   {
     id: "website-cafe",
@@ -190,6 +203,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1440,
     height: 2500,
     description: "Property cards, map section, and agent profiles.",
+    category: "Real Estate",
   },
   {
     id: "website-law-firm",
@@ -198,6 +212,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1366,
     height: 2100,
     description: "Professional legal services template with practice areas.",
+    category: "Law Firm",
   },
   {
     id: "website-nonprofit",
@@ -246,6 +261,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1440,
     height: 2400,
     description: "Enterprise-style homepage with solutions and case studies.",
+    category: "Business",
   },
   {
     id: "website-b2b-services",
@@ -302,6 +318,7 @@ export const templatePresets: TemplateDefinition[] = [
     width: 1366,
     height: 2400,
     description: "Academic institution homepage with programs and admissions.",
+    category: "Education",
   },
   {
     id: "website-crypto-dashboard",
@@ -312,12 +329,103 @@ export const templatePresets: TemplateDefinition[] = [
     description: "Modern fintech landing with charts and product modules.",
   },
   {
+    id: "website-construction",
+    type: "website",
+    name: "Construction",
+    width: 1440,
+    height: 2500,
+    description: "Project showcase, services, and safety-first credibility for contractors.",
+    category: "Construction",
+  },
+  {
+    id: "website-hotel",
+    type: "website",
+    name: "Hotel",
+    width: 1440,
+    height: 2600,
+    description: "Room catalog, amenities, and booking-focused hotel homepage.",
+    category: "Hotel",
+  },
+  {
+    id: "website-travel-agency",
+    type: "website",
+    name: "Travel Agency",
+    width: 1440,
+    height: 2500,
+    description: "Destination packages, itineraries, and booking CTA for travel agencies.",
+    category: "Travel Agency",
+  },
+  {
     id: "poster-a4-portrait",
     type: "poster",
     name: "Poster A4 Portrait",
     width: 2480,
     height: 3508,
     description: "Print-ready A4 portrait poster template.",
+  },
+  {
+    id: "poster-event-flyer",
+    type: "poster",
+    name: "Event Flyer",
+    width: 1080,
+    height: 1920,
+    description: "High-impact event promotion poster for social and print.",
+  },
+  {
+    id: "poster-conference-announcement",
+    type: "poster",
+    name: "Conference Announcement",
+    width: 1440,
+    height: 2160,
+    description: "Professional conference announcement poster with speaker details.",
+  },
+  {
+    id: "poster-music-night",
+    type: "poster",
+    name: "Music Night",
+    width: 1080,
+    height: 1350,
+    description: "Concert and live music event poster with bold typography.",
+  },
+  {
+    id: "poster-food-promo",
+    type: "poster",
+    name: "Food Promo",
+    width: 1200,
+    height: 1800,
+    description: "Restaurant and food promotion poster with offer-first layout.",
+  },
+  {
+    id: "poster-startup-hiring",
+    type: "poster",
+    name: "Startup Hiring",
+    width: 1080,
+    height: 1080,
+    description: "Square hiring campaign poster for social channels.",
+  },
+  {
+    id: "poster-webinar-signup",
+    type: "poster",
+    name: "Webinar Signup",
+    width: 1080,
+    height: 1920,
+    description: "Lead-generation webinar signup poster with strong CTA.",
+  },
+  {
+    id: "poster-corporate-workshop",
+    type: "poster",
+    name: "Corporate Workshop",
+    width: 1240,
+    height: 1754,
+    description: "Corporate workshop and training poster for teams.",
+  },
+  {
+    id: "poster-sale-campaign",
+    type: "poster",
+    name: "Sale Campaign",
+    width: 1080,
+    height: 1350,
+    description: "Retail sale campaign poster with discount-first composition.",
   },
   {
     id: "instagram-post",
@@ -343,6 +451,10 @@ export const getTemplatesByType = (type: TemplateType): TemplateDefinition[] =>
 export const getWebsiteTemplateCategory = (
   template: TemplateDefinition
 ): WebsiteTemplateCategory => {
+  if (template.category) {
+    return template.category;
+  }
+
   const id = template.id;
   if (id.includes("ecommerce") || id.includes("fashion") || id.includes("marketplace")) {
     return "Store";

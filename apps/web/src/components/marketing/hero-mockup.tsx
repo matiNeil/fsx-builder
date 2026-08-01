@@ -106,7 +106,7 @@ export function HeroMockup() {
           <span className="h-2 w-2 rounded-full bg-white/40" />
           <span className="h-2 w-2 rounded-full bg-white/30" />
           <span className="h-2 w-2 rounded-full bg-white/20" />
-          <span className="ml-2 text-[11px]">fsxbuilder.com</span>
+          <span className="ml-2 text-[11px]">fsxstudio.com</span>
         </div>
 
         <div className="rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white">

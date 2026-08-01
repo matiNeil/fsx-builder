@@ -58,6 +58,13 @@ const creditCosts = [
   { action: "image.generate", credits: 8 },
   { action: "image.edit", credits: 3 },
   { action: "website.ai-copy", credits: 3 },
+  { action: "website.ai-generate-site", credits: 10 },
+] as const;
+
+const creditPacks = [
+  { key: "credits_100", name: "100 Credits", credits: 100, priceCents: 500 },
+  { key: "credits_500", name: "500 Credits", credits: 500, priceCents: 2000 },
+  { key: "credits_2000", name: "2,000 Credits", credits: 2000, priceCents: 6000 },
 ] as const;
 
 async function main() {
@@ -77,7 +84,17 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${plans.length} plans and ${creditCosts.length} credit costs.`);
+  for (const pack of creditPacks) {
+    await prisma.creditPack.upsert({
+      where: { key: pack.key },
+      create: pack,
+      update: pack,
+    });
+  }
+
+  console.log(
+    `Seeded ${plans.length} plans, ${creditCosts.length} credit costs, and ${creditPacks.length} credit packs.`
+  );
 }
 
 main()

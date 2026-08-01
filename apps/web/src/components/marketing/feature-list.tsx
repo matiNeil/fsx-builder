@@ -52,7 +52,7 @@ export function FeatureList() {
   return (
     <section id="features" className="scroll-mt-24 space-y-8">
       <Reveal>
-        <h2 className="text-center text-3xl font-semibold tracking-tight">Why FSX Builder</h2>
+        <h2 className="text-center text-3xl font-semibold tracking-tight">Why FSX Studio</h2>
       </Reveal>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {FEATURES.map((feature, index) => (
