@@ -18,7 +18,7 @@ const ACTIONS = [
     color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
   },
   {
-    label: "AI Assistant",
+    label: "FSX Assistant",
     description: "Generate a full site from a description",
     href: "/website-studio/new",
     color: "bg-purple-500/15 text-purple-600 dark:text-purple-400",

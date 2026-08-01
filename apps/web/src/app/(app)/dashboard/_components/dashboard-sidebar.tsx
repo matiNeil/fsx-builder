@@ -5,7 +5,7 @@ const NAV_ITEMS: { label: string; href?: string; active?: boolean }[] = [
   { label: "Dashboard", href: "/dashboard", active: true },
   { label: "Projects", href: "/dashboard#recent-projects" },
   { label: "Templates", href: "/website-studio/new" },
-  { label: "AI Assistant", href: "/website-studio/new" },
+  { label: "FSX Assistant", href: "/website-studio/new" },
   { label: "Domains" },
   { label: "Billing", href: "/account" },
   { label: "Settings", href: "/account" },
